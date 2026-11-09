@@ -1,15 +1,17 @@
-"""Prepara e instala el plugin de la oficina a nivel usuario, para un perfil de equipo.
+"""Prepara e instala el plugin de la oficina a nivel usuario.
 
-Uso: py -3 scripts/instalar.py [--perfil CARPETA] [--solo-generar]
-
-El perfil se elige igual que en el servidor: --perfil, AGENTS_OFFICE_PERFIL, local.json o perfiles/ejemplo.
+Uso: py -3 scripts/instalar.py [--datos CARPETA] [--solo-generar]
 
 1. Resuelve la ruta absoluta de python.exe (el intérprete que corre este script).
    Rechaza el alias de la Microsoft Store: en la forma exec de los hooks no sirve.
-2. Genera plugin/hooks/hooks.json con esa ruta y la carpeta de datos del perfil (`--datos`).
-3. Escribe <datos>/config.json con lo que el hook necesita del perfil (carpeta del equipo, scripts, canales).
-   Genera también plugin/skills/abrir/SKILL.md (/oficina:abrir) con la ruta de iniciar-oficina.ps1.
-4. Registra el marketplace local e instala el plugin (salvo con --solo-generar).
+2. Genera plugin/hooks/hooks.json con esa ruta y la carpeta común de datos (`--datos`, por defecto
+   AGENTS_OFFICE_DATOS o ~/.agents-office).
+3. Escribe <datos>/config.json a partir de los proyectos registrados (scripts/configurar.py).
+4. Genera las skills /oficina:abrir y /oficina:configurar con las rutas de esta máquina.
+5. Registra el marketplace local e instala el plugin (salvo con --solo-generar).
+
+Los proyectos se dan de alta con scripts/configurar.py (o /oficina:configurar): sin proyectos, el hook no
+captura nada.
 """
 import json
 import os
@@ -20,7 +22,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from servidor.perfil import Perfil  # noqa: E402
+from servidor.oficinas import carpeta_comun, leer_proyectos  # noqa: E402
+from servidor.registro import escribir_config_hook  # noqa: E402
 
 PLUGIN = "oficina@agents-office"
 
@@ -60,12 +63,8 @@ def generar_hooks(python, datos):
     return destino
 
 
-def escribir_config(python, perfil, datos):
-    config = {**perfil.para_el_hook(), "python": python, "repo": str(REPO), "perfil": str(perfil.carpeta)}
-    datos.mkdir(parents=True, exist_ok=True)
-    destino = datos / "config.json"
-    destino.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return destino
+def escribir_config(python, datos):
+    return escribir_config_hook(datos, {"python": python, "repo": str(REPO)})
 
 
 SKILL_ABRIR = """---
@@ -88,12 +87,46 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "{script}"
 """
 
 
-def generar_skill():
-    """plugin/skills/abrir/SKILL.md con la ruta de iniciar-oficina.ps1 de esta máquina (no se versiona)."""
-    destino = REPO / "plugin" / "skills" / "abrir" / "SKILL.md"
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(SKILL_ABRIR.format(script=REPO / "iniciar-oficina.ps1", repo=REPO), encoding="utf-8")
-    return destino
+SKILL_CONFIGURAR = """---
+name: configurar
+description: Registra el proyecto actual en la oficina de agentes (o lo da de baja), con sus tablones de pendientes y de auditorías. Usar cuando la persona pide sumar este proyecto a la oficina, configurarla o armar los tablones.
+---
+
+# Sumar este proyecto a la oficina
+
+1. Mostrá el plan, sin escribir nada:
+
+   ```
+   "{python}" "{script}" "<carpeta del proyecto actual>"
+   ```
+
+2. Contale a la persona, en pocas líneas, qué va a pasar: el perfil que se crea, en qué sala queda cada
+   agente, qué tablones se crean y el bloque que se agregaría al CLAUDE.md (mostralo tal cual).
+3. Preguntale si lo aplica y si suma el bloque al CLAUDE.md. Recién con su sí:
+
+   ```
+   "{python}" "{script}" "<carpeta del proyecto actual>" --aplicar [--claude-md]
+   ```
+
+4. Avisá que las sesiones nuevas de este proyecto ya aparecen en la oficina (`/oficina:abrir`) y que la
+   sala de cada agente se cambia en `zonas.json` del perfil que se creó.
+
+Para darlo de baja: el mismo comando con `--quitar` (no borra el perfil ni los eventos).
+"""
+
+
+def generar_skills(python):
+    """Skills /oficina:abrir y /oficina:configurar con las rutas de esta máquina (no se versionan)."""
+    destinos = []
+    for nombre, plantilla, datos in (
+        ("abrir", SKILL_ABRIR, {"script": REPO / "iniciar-oficina.ps1", "repo": REPO}),
+        ("configurar", SKILL_CONFIGURAR, {"script": REPO / "scripts" / "configurar.py", "python": python}),
+    ):
+        destino = REPO / "plugin" / "skills" / nombre / "SKILL.md"
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(plantilla.format(**datos), encoding="utf-8")
+        destinos.append(destino)
+    return destinos
 
 
 def claude(*args):
@@ -105,14 +138,16 @@ def claude(*args):
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    perfil = Perfil(sys.argv[sys.argv.index("--perfil") + 1] if "--perfil" in sys.argv[:-1] else None)
-    datos = perfil.carpeta_datos()
+    datos = carpeta_comun(sys.argv[sys.argv.index("--datos") + 1] if "--datos" in sys.argv[:-1] else None)
     python = resolver_python()
-    print(f"perfil: {perfil.carpeta}")
+    print(f"datos: {datos}")
     print(f"python: {python}")
     print(f"hooks: {generar_hooks(python, datos)}")
-    print(f"config: {escribir_config(python, perfil, datos)}")
-    print(f"skill /oficina:abrir: {generar_skill()}")
+    print(f"config: {escribir_config(python, datos)}")
+    for skill in generar_skills(python):
+        print(f"skill: {skill}")
+    proyectos = [p["id"] for p in leer_proyectos(datos)]
+    print(f"proyectos: {', '.join(proyectos) if proyectos else 'ninguno (sumalos con scripts/configurar.py)'}")
     if "--solo-generar" in sys.argv:
         return 0
     claude("plugin", "marketplace", "add", str(REPO))

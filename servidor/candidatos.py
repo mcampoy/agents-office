@@ -60,8 +60,9 @@ def nombres_de_proveedores(rutas):
 
 
 class Candidatos:
-    def __init__(self, carpeta_eventos):
+    def __init__(self, carpeta_eventos, filtro=None):
         self.carpeta = Path(carpeta_eventos)
+        self.filtro = filtro or (lambda e: True)
         self._cache = {}  # archivo -> (mtime_ns, lanzamientos)
 
     def _lanzamientos(self, ruta):
@@ -81,7 +82,7 @@ class Candidatos:
                     e = json.loads(linea)
                 except ValueError:
                     continue
-                if e.get("evento") != "PreToolUse" or e.get("tool_name") not in LANZADORES:
+                if e.get("evento") != "PreToolUse" or e.get("tool_name") not in LANZADORES or not self.filtro(e):
                     continue
                 r = e.get("resumen") or {}
                 if r.get("subagent_type") and r.get("description"):

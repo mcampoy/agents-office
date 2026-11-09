@@ -1,8 +1,8 @@
 """Hook de captura de la oficina de agentes.
 
 Claude Code lo llama en cada evento con el JSON del evento por stdin.
-Si la sesión es del equipo (CLAUDE_PROJECT_DIR dentro de la carpeta del equipo), agrega una línea
-redactada a <datos>/eventos/AAAA-MM-DD.jsonl. El cwd del evento se guarda solo como dato:
+Si la sesión es de un proyecto registrado (CLAUDE_PROJECT_DIR dentro de su carpeta), agrega una línea
+redactada, marcada con el id del proyecto, a <datos>/eventos/AAAA-MM-DD.jsonl. El cwd del evento se guarda solo como dato:
 cambia si Claude cambia de directorio, CLAUDE_PROJECT_DIR queda en la raíz de la sesión.
 
 <datos> llega como `--datos <carpeta>` (lo escribe el instalador en hooks.json); si no, AGENTS_OFFICE_DATOS
@@ -54,14 +54,30 @@ def ahora():
 _CONFIG = None
 
 
+def cargar_registro():
+    try:
+        with open(os.path.join(DATOS, "config.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def proyecto_de(registro, carpeta):
+    """El proyecto registrado que contiene la carpeta de la sesión (el más específico), o None.
+    Acepta el formato de varios proyectos ({"proyectos": [...]}) y el viejo, de un solo equipo ({"equipo_dir"})."""
+    if "proyectos" in registro:
+        candidatos = [p for p in registro["proyectos"] if p.get("dir") and dentro_de(carpeta, p["dir"])]
+        return max(candidatos, key=lambda p: len(p["dir"])) if candidatos else None
+    if registro.get("equipo_dir") and dentro_de(carpeta, registro["equipo_dir"]):
+        return registro
+    return None
+
+
 def cargar_config():
+    """La config del proyecto de esta sesión (scripts, canales, variable de la corrida). Vacía si no es de uno."""
     global _CONFIG
     if _CONFIG is None:
-        try:
-            with open(os.path.join(DATOS, "config.json"), encoding="utf-8") as f:
-                _CONFIG = json.load(f)
-        except (OSError, ValueError):
-            _CONFIG = {}
+        _CONFIG = proyecto_de(cargar_registro(), os.environ.get("CLAUDE_PROJECT_DIR")) or {}
     return _CONFIG
 
 
@@ -77,8 +93,7 @@ def dentro_de(ruta, base):
 
 
 def es_sesion_del_equipo():
-    equipo = cargar_config().get("equipo_dir")
-    return bool(equipo) and dentro_de(os.environ.get("CLAUDE_PROJECT_DIR"), equipo)
+    return bool(cargar_config())
 
 
 def corto(valor, largo=LARGO_TEXTO):
@@ -236,6 +251,7 @@ def registro(datos):
         "permission_mode": datos.get("permission_mode"),
         "effort": esfuerzo if isinstance(esfuerzo, (str, int)) else None,
         "cwd": corto(datos.get("cwd"), 260),
+        "proyecto": corto(cargar_config().get("id"), 80),
     }
     resumen = {}
     herramienta = datos.get("tool_name")

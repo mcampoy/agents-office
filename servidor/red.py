@@ -11,6 +11,9 @@ Endpoints:
                   la carpeta del perfil, nunca en el área). Exige JSON, Origin propio y un layout válido
   /api/sprites    sprites.json del perfil
   /api/perfil     nombre del equipo, roles y textos del piso (sin rutas del área)
+  /api/proyectos  proyectos registrados, con su última actividad
+
+Todos (salvo /api/proyectos) aceptan `?proyecto=<id>`; sin él, el proyecto con actividad más reciente.
 """
 import json
 import mimetypes
@@ -57,9 +60,13 @@ def carpeta_web():
     return dist if (dist / "index.html").exists() else WEB / "basico"
 
 
-def crear_servidor(oficina, puerto):
+def crear_servidor(oficinas, puerto):
+    from .oficinas import Oficinas
+    if not isinstance(oficinas, Oficinas):
+        oficinas = Oficinas.de_una(oficinas)
+
     class Manejador(BaseHTTPRequestHandler):
-        server_version = "oficina-idi"
+        server_version = "agents-office"
 
         def log_message(self, *args):
             pass
@@ -71,11 +78,14 @@ def crear_servidor(oficina, puerto):
                 return self.responder(421, {"error": "host no permitido"})
             url = urlsplit(self.path)
             q = parse_qs(url.query)
+            oficina = oficinas.elegir(q.get("proyecto", [None])[0])
             try:
+                if url.path == "/api/proyectos":
+                    return self.responder(200, {"proyectos": oficinas.lista()})
                 if url.path == "/api/estado":
                     return self.responder(200, oficina.foto)
                 if url.path == "/api/stream":
-                    return self.stream()
+                    return self.stream(oficina)
                 if url.path == "/api/buscar":
                     return self.responder(200, {"resultados": oficina.area.buscar(q.get("q", [""])[0])})
                 if url.path == "/api/archivo":
@@ -100,6 +110,13 @@ def crear_servidor(oficina, puerto):
         def do_POST(self):
             real = self.server.server_address[1]
             anfitriones = {f"127.0.0.1:{real}", f"localhost:{real}"}
+            try:
+                largo = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                largo = -1
+            # El cuerpo se lee siempre (con tope) antes de responder: si se rechaza sin leerlo, Windows puede
+            # cortar la conexión y el cliente no recibe el código de error
+            cuerpo = self.rfile.read(largo) if 0 < largo <= MAX_LAYOUT_BYTES else b""
             if self.headers.get("Host") not in anfitriones:
                 return self.responder(421, {"error": "host no permitido"})
             # Solo la propia web: Origin igual al servidor y cuerpo JSON (otro sitio no puede mandar
@@ -110,14 +127,12 @@ def crear_servidor(oficina, puerto):
                 return self.responder(415, {"error": "se espera application/json"})
             if urlsplit(self.path).path != "/api/layout":
                 return self.responder(404, {"error": "no existe"})
-            try:
-                largo = int(self.headers.get("Content-Length") or 0)
-            except ValueError:
-                largo = -1
             if not 0 < largo <= MAX_LAYOUT_BYTES:
+                self.close_connection = True
                 return self.responder(413, {"error": "tamaño inválido"})
+            oficina = oficinas.elegir(parse_qs(urlsplit(self.path).query).get("proyecto", [None])[0])
             try:
-                datos = validar_layout(json.loads(self.rfile.read(largo).decode("utf-8")))
+                datos = validar_layout(json.loads(cuerpo.decode("utf-8")))
             except (UnicodeDecodeError, json.JSONDecodeError):
                 return self.responder(400, {"error": "JSON inválido"})
             except LayoutInvalido as error:
@@ -153,7 +168,7 @@ def crear_servidor(oficina, puerto):
             self.end_headers()
             self.wfile.write(datos)
 
-        def stream(self):
+        def stream(self, oficina):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -178,18 +193,18 @@ def crear_servidor(oficina, puerto):
     return servidor
 
 
-def correr(oficina, puerto, intervalo=0.5):
-    oficina.actualizar(forzar=True)
+def correr(oficinas, puerto, intervalo=0.5):
+    oficinas.actualizar(forzar=True)
 
     def ciclo():
         while True:
             try:
-                oficina.actualizar()
+                oficinas.actualizar()
             except Exception as error:  # el servidor no se cae por un archivo raro
                 print(f"[oficina] error al actualizar: {type(error).__name__}: {error}")
             time.sleep(intervalo)
 
     threading.Thread(target=ciclo, daemon=True).start()
-    servidor = crear_servidor(oficina, puerto)
+    servidor = crear_servidor(oficinas, puerto)
     print(f"Oficina en http://127.0.0.1:{puerto}/")
     servidor.serve_forever()

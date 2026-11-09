@@ -20,7 +20,11 @@ from pathlib import Path
 from .util import tabla_de_encabezado
 
 EXTENSIONES = (".md",)
-EXCLUIDAS = {".git", "__pycache__", "node_modules", "pages", "logs", "tmp", ".playwright-mcp"}
+EXCLUIDAS = {".git", "__pycache__", "node_modules", "pages", "logs", "tmp", ".playwright-mcp", ".venv", "venv",
+             "dist", "build", ".next", ".cache"}
+# Con "." en las raíces, la lista blanca es todo el proyecto (salvo EXCLUIDAS y carpetas ocultas),
+# hasta esta profundidad: los proyectos de código pueden ser grandes.
+PROFUNDIDAD_TODO = 4
 LIMITE_BYTES = 2_000_000
 LINEAS_DE_ENCABEZADO = 15
 
@@ -50,12 +54,15 @@ class Area:
         partes = rel.split("/")
         if any(p in ("", ".", "..") for p in partes) or ":" in rel:
             raise FueraDeLaListaBlanca("ruta no permitida")
-        if partes[0] not in self.raices:
+        todo = "." in self.raices
+        if not todo and partes[0] not in self.raices:
             raise FueraDeLaListaBlanca("fuera de las raíces permitidas")
+        if todo and any(p in EXCLUIDAS for p in partes[:-1]):
+            raise FueraDeLaListaBlanca("carpeta excluida")
         if not rel.lower().endswith(self.extensiones):
             raise FueraDeLaListaBlanca("extensión no permitida")
         absoluta = (self.raiz / rel).resolve()
-        permitida = (self.raiz / partes[0]).resolve()
+        permitida = self.raiz.resolve() if todo else (self.raiz / partes[0]).resolve()
         if permitida not in absoluta.parents:
             raise FueraDeLaListaBlanca("la ruta sale de su raíz")
         return absoluta
@@ -186,7 +193,12 @@ class Area:
             if not base.is_dir():
                 continue
             for carpeta, subcarpetas, nombres in os.walk(base):
-                subcarpetas[:] = [s for s in subcarpetas if s not in EXCLUIDAS]
+                if raiz == ".":
+                    nivel = len(Path(carpeta).relative_to(base).parts)
+                    subcarpetas[:] = [] if nivel >= PROFUNDIDAD_TODO else [
+                        s for s in subcarpetas if s not in EXCLUIDAS and not s.startswith(".") or s == ".claude"]
+                else:
+                    subcarpetas[:] = [s for s in subcarpetas if s not in EXCLUIDAS]
                 for nombre in nombres:
                     if nombre.lower().endswith(self.extensiones):
                         yield (Path(carpeta) / nombre).relative_to(self.raiz).as_posix()

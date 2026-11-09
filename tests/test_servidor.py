@@ -898,5 +898,36 @@ class CandidatoAAgente(unittest.TestCase):
             self.assertEqual(Candidatos(tmp).calcular(dt.date(2026, 11, 9), lambda t: True), [])
 
 
+class Tablones(unittest.TestCase):
+    """Los tablones de pendientes y auditorías, con el formato estándar y con el de entradas por fecha."""
+
+    def test_pendientes_con_secciones_y_tareas_de_sesion(self):
+        from servidor import tablones
+        texto = (tablones.PLANTILLA_PENDIENTES
+                 .replace("## En curso\n", "## En curso\n- [ ] migrar la base\n")
+                 .replace("## Siguen\n", "## Siguen\n- [ ] revisar permisos\n- [x] ya estaba hecha\n"))
+        r = tablones.pendientes(texto, None, [{"titulo": "leer pendientes", "creada": "t1", "completada": None},
+                                             {"titulo": "armar informe", "creada": "t0", "completada": "t2"}])
+        self.assertEqual([i["titulo"] for i in r["en_curso"]], ["leer pendientes", "migrar la base"])
+        self.assertEqual([i["titulo"] for i in r["siguen"]], ["revisar permisos"])
+        self.assertEqual([i["titulo"] for i in r["hechas"]], ["armar informe", "ya estaba hecha"])
+
+    def test_pendientes_sin_secciones_van_a_siguen(self):
+        from servidor import tablones
+        bloques = {"entradas": [{"titulo": "Presentación lista", "fecha": "2026-11-02"}]}
+        r = tablones.pendientes("## 2026-11-02 · Presentación lista\n", bloques, [])
+        self.assertEqual(r["siguen"][0]["titulo"], "Presentación lista")
+        self.assertEqual(r["en_curso"], [])
+
+    def test_auditorias_abiertas_y_resueltas(self):
+        from servidor import tablones
+        bloques = {"entradas": [{"titulo": "Permiso de Drive", "fecha": "2026-11-01", "campos": {"Estado": "abierta"}},
+                                {"titulo": "Hook roto", "fecha": "2026-10-30", "campos": {"Estado (05/11)": "resuelta"}},
+                                {"titulo": "Sin estado", "fecha": None, "campos": {}}]}
+        r = tablones.auditorias(bloques)
+        self.assertEqual([i["titulo"] for i in r["abiertas"]], ["Permiso de Drive", "Sin estado"])
+        self.assertEqual([i["titulo"] for i in r["resueltas"]], ["Hook roto"])
+
+
 if __name__ == "__main__":
     unittest.main()

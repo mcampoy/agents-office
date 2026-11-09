@@ -14,6 +14,7 @@ from .eventos import LectorEventos
 from .flujos import Flujos
 from .modelo import Modelo, proxima_corrida, zona_de
 from .perfil import Perfil
+from . import tablones
 from .util import relativa_al_area
 
 REPO = Path(__file__).resolve().parent.parent
@@ -27,8 +28,19 @@ def cargar_json(ruta):
         return json.load(f)
 
 
+def dentro_de(ruta, base):
+    if not ruta or not base:
+        return False
+    r = os.path.normcase(os.path.normpath(ruta))
+    b = os.path.normcase(os.path.normpath(base))
+    return r == b or r.startswith(b.rstrip("\\/") + os.sep)
+
+
 class Oficina:
-    def __init__(self, datos=None, perfil=None, raiz_area=None, equipo_dir=None):
+    """La oficina de un proyecto. Con `proyecto` (y un `lector` compartido) se queda solo con sus eventos:
+    los que el hook marcó con su id o, en eventos viejos sin marca, los de su carpeta."""
+
+    def __init__(self, datos=None, perfil=None, raiz_area=None, equipo_dir=None, proyecto=None, lector=None):
         self.perfil = perfil if isinstance(perfil, Perfil) else Perfil(perfil)
         self.config = self.perfil.datos
         # La carpeta del perfil: de ahí salen zonas, flujos, layout y sprites, y ahí guarda el editor
@@ -42,8 +54,10 @@ class Oficina:
                          status=self.archivos.get("status"))
         self.flujos = Flujos({"verificador": self.perfil["verificador"], **self.perfil.archivo("flujos.json", {})}, self.area)
         self.catalogo = Catalogo(self.equipo, self.zonas, self.area)
-        self.lector = LectorEventos(self.datos / "eventos")
-        self.candidatos = Candidatos(self.datos / "eventos")
+        self.proyecto = proyecto
+        self.lector_propio = lector is None
+        self.lector = lector or LectorEventos(self.datos / "eventos")
+        self.candidatos = Candidatos(self.datos / "eventos", self.es_mio)
         self.umbrales = self.config.get("umbrales", {})
         self._conocidos = []
         self._barrido_en = None
@@ -57,11 +71,24 @@ class Oficina:
 
     # --- Ciclo --------------------------------------------------------------------
 
-    def actualizar(self, ahora=None, forzar=False):
-        """Lee lo nuevo y recalcula si hace falta. Devuelve True si la foto cambió."""
+    def es_mio(self, evento):
+        if not self.proyecto:
+            return True
+        marca = evento.get("proyecto")
+        if marca:
+            return marca == self.proyecto
+        return dentro_de(evento.get("cwd"), self.equipo)
+
+    def eventos(self):
+        return [e for e in self.lector.eventos if self.es_mio(e)] if self.proyecto else self.lector.eventos
+
+    def actualizar(self, ahora=None, forzar=False, hay_nuevos=None):
+        """Lee lo nuevo y recalcula si hace falta. Devuelve True si la foto cambió.
+        Con un lector compartido, quien lo maneja lee y pasa `hay_nuevos`."""
         ahora = ahora or dt.datetime.now().astimezone()
         reloj = time.monotonic()
-        hay_nuevos = self.lector.leer_nuevos(ahora.date()) > 0
+        if hay_nuevos is None:
+            hay_nuevos = self.lector.leer_nuevos(ahora.date()) > 0
         barrido = self._barrido_en is None or reloj - self._barrido_en > CADA_BARRIDO_S
         if barrido:
             self.barrido()
@@ -115,7 +142,7 @@ class Oficina:
             "scripts": self.perfil["scripts"],
             "memoria_mcp": self.perfil["memoria_mcp"],
         }
-        modelo = Modelo(contexto).aplicar(self.lector.eventos)
+        modelo = Modelo(contexto).aplicar(self.eventos())
         self.refrescar_nombradas(modelo.escrituras)
         foto = modelo.foto(ahora)
         for inst in foto["instancias"]:
@@ -156,6 +183,7 @@ class Oficina:
                 "en_curso": any(not s["fin"] for s in corrida_sesiones),
             },
             "salud": self.salud(ahora),
+            "tablones": self.tablones(pendientes, foto["tareas_sesion"]),
             "candidatos": self.candidatos.calcular(
                 ahora.date(),
                 lambda tipo: tipo in self.zonas.get("generales", []) or (bool(agentes) and tipo not in agentes),
@@ -182,6 +210,14 @@ class Oficina:
         if destino.exists():
             os.replace(destino, destino.with_suffix(".json.bak"))
         os.replace(temporal, destino)
+
+    def tablones(self, pendientes, tareas_sesion):
+        ruta_p = self.archivos.get("pendientes")
+        texto = self.area.texto(ruta_p) if ruta_p else None
+        return {
+            "pendientes": {"ruta": ruta_p, **tablones.pendientes(texto, pendientes, tareas_sesion)},
+            "auditorias": {"ruta": self.archivos.get("fricciones"), **tablones.auditorias(self.bloques("fricciones"))},
+        }
 
     def bloques(self, cual):
         """pendientes.md, fricciones.md o decisiones.md del equipo, si el perfil los define."""
