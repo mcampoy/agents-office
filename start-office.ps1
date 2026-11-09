@@ -8,6 +8,7 @@
   3. Otherwise, checks that the python.exe registered by the installer exists, starts the
      server in the background, without a window, waits until it answers and opens the browser.
   4. If the compiled web (web/dist) is missing, warns: the office shows the basic view.
+  5. If phone access is enabled (scripts/lan.py), prints the URL to open on the phone.
 
   The server writes its output to <data>/server.log. To stop it: .\start-office.ps1 -Stop
   Messages are shown to the user, so they are Spanish.
@@ -33,6 +34,7 @@ $pyArgs = @('-3')
 $info = & $py @pyArgs -c @"
 import json, sys
 sys.path.insert(0, r'$repo')
+from server import lan
 from server.offices import read_projects
 from server.profile import Profile, data_folder
 data = data_folder()
@@ -45,8 +47,11 @@ try:
 except (OSError, ValueError):
     pass
 name = p['name'] if chosen or len(projects) < 2 else ', '.join(x['id'] for x in projects)
+settings = lan.load(data)
+ip = lan.primary_ip() if settings else None
 print(json.dumps({'port': p['port'], 'data': str(data), 'profile': str(p.folder), 'name': name,
-                  'python': config.get('python')}))
+                  'python': config.get('python'), 'lanIp': ip if settings else None,
+                  'lanKey': settings['key'] if settings and ip else None}))
 "@
 if ($LASTEXITCODE -ne 0) { throw "No se pudo leer el perfil. ¿Está instalado Python 3 (py -3)?" }
 $info = $info | ConvertFrom-Json
@@ -97,5 +102,8 @@ if (Test-Office) {
     if (-not $ready) { throw "El servidor no respondió en $url. Revisá $log.err" }
     Write-Host "Oficina ($($info.name)) en $url"
 }
+
+# With -Port, the phone URL uses that port, not the profile's
+if ($info.lanKey) { Write-Host "Celular (mismo Wi-Fi): http://$($info.lanIp):$Port/?key=$($info.lanKey)" }
 
 if (-not $NoBrowser) { Start-Process $url }

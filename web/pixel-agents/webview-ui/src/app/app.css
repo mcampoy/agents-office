@@ -58,7 +58,9 @@
 
 .ao-screen {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Without this the column grows to the longest unwrapped text and the header spills off-screen */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -655,4 +657,28 @@ details.ao-item p {
   flex-direction: column;
   gap: 4px;
   align-items: flex-start;
+}
+
+/* --- Phone access (button in the desktop header) ---------------------------------------------------- */
+.ao-phone {
+  position: relative;
+}
+.ao-phone-box {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  display: grid;
+  gap: 6px;
+  width: 340px;
+  padding: 10px 12px;
+  background: var(--color-panel);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-pixel);
+  white-space: normal;
+}
+.ao-phone-url {
+  user-select: all;
+  word-break: break-all;
+  color: #e0b050;
 }

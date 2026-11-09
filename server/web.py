@@ -1,4 +1,7 @@
-"""The office's local HTTP server. Only 127.0.0.1. Read-only over the area and the team.
+"""The office's local HTTP server. Read-only over the area and the team.
+
+It listens on 127.0.0.1. With network access enabled (server/lan.py) it also listens on the local network:
+network clients need the key and are read-only.
 
 Endpoints:
   /                the compiled web (web/dist) or, if it does not exist yet, the basic view (web/basic)
@@ -12,6 +15,7 @@ Endpoints:
   /api/sprites     the profile's sprites.json
   /api/profile     team name, roles and floor texts (no area paths)
   /api/projects    registered projects, with their last activity
+  /api/lan         the phone URL with the key (only for the computer itself; 404 from the network)
 
 All of them (except /api/projects) accept `?project=<id>`; without it, the project with the latest activity.
 Error messages are shown in the web, so they are Spanish.
@@ -20,10 +24,12 @@ import json
 import mimetypes
 import threading
 import time
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
+from . import lan as lan_access
 from .area import OutsideAllowlist
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -61,10 +67,19 @@ def web_folder():
     return dist if (dist / "index.html").exists() else WEB / "basic"
 
 
-def create_server(offices, port):
+LOOPBACK = {"127.0.0.1", "::1"}
+
+
+def create_server(offices, port, lan=None, host=None, loopback=None):
+    """`lan`: {"key", "addresses"} to accept network clients (see server/lan.py); None = only this computer.
+    "addresses" is a list or a server.lan.Addresses, which follows the IP if it changes.
+    `host`: the address to listen on (by default 127.0.0.1, or every interface with `lan`).
+    `loopback`: client addresses treated as this computer (tests pass an empty set to act as a phone)."""
     from .offices import Offices
     if not isinstance(offices, Offices):
         offices = Offices.of_one(offices)
+    loopback = LOOPBACK if loopback is None else set(loopback)
+    guard = lan_access.Guard()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "agents-office"
@@ -72,15 +87,88 @@ def create_server(offices, port):
         def log_message(self, *args):
             pass
 
+        def host_allowed(self, value):
+            """`value`: "name:port" from the Host header (or an Origin without its scheme)."""
+            name, _, port = (value or "").rpartition(":")
+            if port != str(self.server.server_address[1]):
+                return False
+            if name in ("127.0.0.1", "localhost"):
+                return True
+            if not lan:
+                return False
+            known = lan["addresses"]
+            return known.knows(name) if hasattr(known, "knows") else name in known
+
+        def is_local(self):
+            return self.client_address[0] in loopback
+
+        def cookie_key(self):
+            try:
+                morsel = SimpleCookie(self.headers.get("Cookie") or "").get(lan_access.COOKIE)
+            except CookieError:
+                return None
+            return morsel.value if morsel else None
+
+        def check_access(self, url, q):
+            """For network clients: True if they can go on; otherwise it already answered."""
+            ip = self.client_address[0]
+            if guard.blocked(ip):
+                return self.deny(429, url, "Demasiados intentos con una clave equivocada. Probá de nuevo más tarde.")
+            if lan_access.valid(self.cookie_key(), lan["key"]):
+                return True
+            given = q.get("key", [None])[0]
+            if given is not None:
+                if lan_access.valid(given, lan["key"]):
+                    # The key goes to an HttpOnly cookie and leaves the URL (history, screenshots)
+                    rest = urlencode([(k, v) for k, vs in q.items() if k != "key" for v in vs])
+                    self.send_response(302)
+                    self.send_header("Location", url.path + (f"?{rest}" if rest else ""))
+                    self.send_header("Set-Cookie", f"{lan_access.COOKIE}={lan['key']}; Max-Age={lan_access.COOKIE_MAX_AGE_S}; "
+                                                   "Path=/; HttpOnly; SameSite=Strict")
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return False
+                guard.fail(ip)
+                return self.deny(401, url, "La clave no es correcta.")
+            return self.deny(401, url, "Para ver la oficina desde otro dispositivo, ingresá la clave.")
+
+        def deny(self, code, url, message):
+            if url.path.startswith("/api/"):
+                self.respond(code, {"error": message})
+                return False
+            data = lan_access.KEY_PAGE.replace("{message}", message).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.end_headers()
+            self.wfile.write(data)
+            return False
+
         def do_GET(self):
-            real = self.server.server_address[1]
-            hosts = {f"127.0.0.1:{real}", f"localhost:{real}"}
-            if self.headers.get("Host") not in hosts:
+            if not self.host_allowed(self.headers.get("Host")):
                 return self.respond(421, {"error": "host no permitido"})
             url = urlsplit(self.path)
             q = parse_qs(url.query)
+            local = self.is_local()
+            if not local and (not lan or not self.check_access(url, q)):
+                if not lan:
+                    self.respond(403, {"error": "solo desde esta computadora"})
+                return None
             office = offices.pick(q.get("project", [None])[0])
             try:
+                if url.path == "/api/lan":
+                    if not local:
+                        return self.respond(404, {"error": "no existe"})
+                    if not lan:
+                        return self.respond(200, {"enabled": False, "url": None})
+                    known = lan["addresses"]
+                    ip = ((known() if callable(known) else known) or [None])[0]
+                    url_ = lan_access.phone_url(ip, self.server.server_address[1], lan["key"]) if ip else None
+                    return self.respond(200, {"enabled": True, "url": url_})
                 if url.path == "/api/projects":
                     return self.respond(200, {"projects": offices.listing()})
                 if url.path == "/api/state":
@@ -109,8 +197,6 @@ def create_server(offices, port):
                 return None
 
         def do_POST(self):
-            real = self.server.server_address[1]
-            hosts = {f"127.0.0.1:{real}", f"localhost:{real}"}
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -118,11 +204,15 @@ def create_server(offices, port):
             # The body is always read (with a cap) before answering: if a request is rejected without reading
             # it, Windows may reset the connection and the client never gets the error code
             body = self.rfile.read(length) if 0 < length <= MAX_LAYOUT_BYTES else b""
-            if self.headers.get("Host") not in hosts:
+            if not self.host_allowed(self.headers.get("Host")):
                 return self.respond(421, {"error": "host no permitido"})
+            if not self.is_local():
+                # From the network the office is read-only: the floor editor is used from the computer
+                return self.respond(403, {"error": "desde otro dispositivo la oficina es de solo lectura"})
             # Only our own web: Origin equal to the server and a JSON body (another site cannot send
             # application/json without a preflight, and the preflight gets no CORS)
-            if self.headers.get("Origin") not in {f"http://{h}" for h in hosts}:
+            origin = self.headers.get("Origin") or ""
+            if not (origin.startswith("http://") and self.host_allowed(origin[len("http://"):])):
                 return self.respond(403, {"error": "origen no permitido"})
             if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
                 return self.respond(415, {"error": "se espera application/json"})
@@ -189,7 +279,7 @@ def create_server(offices, port):
                     last_heartbeat = time.monotonic()
                 self.wfile.flush()
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = ThreadingHTTPServer((host or ("0.0.0.0" if lan else "127.0.0.1"), port), Handler)
     server.daemon_threads = True
     return server
 
@@ -206,6 +296,10 @@ def run(offices, port, interval=0.5):
             time.sleep(interval)
 
     threading.Thread(target=cycle, daemon=True).start()
-    server = create_server(offices, port)
+    settings = lan_access.load(offices.data)
+    lan = {"key": settings["key"], "addresses": lan_access.Addresses()} if settings else None
+    server = create_server(offices, port, lan=lan)
     print(f"Office at http://127.0.0.1:{port}/")
+    if lan and lan["addresses"]():
+        print(lan_access.startup_line(lan["addresses"]()[0], port))
     server.serve_forever()

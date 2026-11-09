@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { OfficeState } from '../office/engine/officeState.js';
-import { currentProject, goToProject, type ProjectListing } from './api.ts';
+import { api, currentProject, goToProject, type ProjectListing } from './api.ts';
 import type { Connection, Resources } from './data.ts';
 import { useSnapshot } from './data.ts';
 import { Floor } from './Floor.tsx';
@@ -157,6 +157,39 @@ function SessionInfo({ s, compact = false }: { s: Statusline | null; compact?: b
   );
 }
 
+/** The phone URL (with the key) if access from the Wi-Fi is enabled. The server only gives it to this computer. */
+function usePhoneUrl(): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(api('lan'), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { url?: string | null } | null) => setUrl(d?.url ?? null))
+      .catch(() => undefined);
+  }, []);
+  return url;
+}
+
+/** Button that shows the URL to open on the phone (same Wi-Fi). */
+function PhoneAccess() {
+  const url = usePhoneUrl();
+  const [open, setOpen] = useState(false);
+  if (!url) return null;
+  return (
+    <span className="ao-phone">
+      <button className="ao-button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        Celular
+      </button>
+      {open && (
+        <span className="ao-phone-box" role="dialog" aria-label="Abrir en el celular">
+          <span>Desde el celular, en el mismo Wi-Fi:</span>
+          <code className="ao-phone-url">{url}</code>
+          <span className="ao-muted">Usalo solo en un Wi-Fi de confianza. La clave queda guardada en el celular.</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Project selector: only if the office follows more than one. Changing reloads the page with ?p=<id>. */
 function ProjectSelector({ projects }: { projects: ProjectListing[] }) {
   if (projects.length < 2) return <div className="ao-mark">{profile().name}</div>;
@@ -208,6 +241,7 @@ function Header({ snapshot, connection, projects }: { snapshot: Snapshot | null;
           </span>
         )}
         <span className={connection === 'en vivo' ? 'ao-muted' : 'ao-notice'}>● {connection}</span>
+        <PhoneAccess />
       </div>
       {snapshot?.statusline?.line && (
         <div className="ao-statusline" title="Tu statusline, tal como se ve en la terminal">
