@@ -104,6 +104,47 @@ def phone_url(ip, port, key):
     return f"http://{ip}:{port}/?key={key}"
 
 
+def startup_line(ip, port):
+    """What the server prints at startup. stdout ends up in server.log, so it carries no key."""
+    return f"Phone (same Wi-Fi): http://{ip}:{port}/ (key: py -3 scripts/lan.py --show)"
+
+
+class Addresses:
+    """The computer's LAN addresses, looked up again every `ttl_s` seconds: the IP can change while the
+    office runs (DHCP, another Wi-Fi). An unknown Host forces a lookup, at most once every `retry_s`."""
+
+    def __init__(self, lookup=local_addresses, clock=time.monotonic, ttl_s=30, retry_s=5):
+        self.lookup = lookup
+        self.clock = clock
+        self.ttl_s = ttl_s
+        self.retry_s = retry_s
+        self.lock = threading.Lock()
+        self.found = []
+        self.at = None
+
+    def _refresh(self, now):
+        self.found = list(self.lookup())
+        self.at = now
+
+    def __call__(self):
+        with self.lock:
+            now = self.clock()
+            if self.at is None or now - self.at >= self.ttl_s:
+                self._refresh(now)
+            return list(self.found)
+
+    def knows(self, ip):
+        with self.lock:
+            now = self.clock()
+            if self.at is None or now - self.at >= self.ttl_s:
+                self._refresh(now)
+            if ip in self.found:
+                return True
+            if now - self.at >= self.retry_s:
+                self._refresh(now)
+            return ip in self.found
+
+
 class Guard:
     """Wrong-key counter per client address."""
 

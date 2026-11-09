@@ -161,5 +161,77 @@ class LocalComputer(Network):
         self.assertEqual(json.loads(body)["url"], f"http://{LAN_IP}:{self.port}/?key={self.key}")
 
 
+class Addresses(unittest.TestCase):
+    """The computer's IP can change while the office runs (DHCP, another Wi-Fi): the server notices."""
+
+    def test_cached_and_refreshed_on_a_miss(self):
+        now = [0.0]
+        found = [["192.168.0.10"]]
+        calls = []
+
+        def lookup():
+            calls.append(1)
+            return list(found[0])
+
+        addresses = lan.Addresses(lookup=lookup, clock=lambda: now[0], ttl_s=30, retry_s=5)
+        self.assertEqual(addresses(), ["192.168.0.10"])
+        self.assertEqual(addresses(), ["192.168.0.10"])
+        self.assertEqual(len(calls), 1)
+        found[0] = ["192.168.0.77"]
+        # An unknown Host refreshes, but not more than once every retry_s
+        self.assertFalse(addresses.knows("192.168.0.77"))
+        now[0] = 6
+        self.assertTrue(addresses.knows("192.168.0.77"))
+        self.assertEqual(addresses()[0], "192.168.0.77")
+        now[0] = 7
+        self.assertFalse(addresses.knows("10.0.0.1"))
+        self.assertEqual(len(calls), 2)
+        # And it refreshes on its own after ttl_s
+        found[0] = ["192.168.0.88"]
+        now[0] = 40
+        self.assertEqual(addresses(), ["192.168.0.88"])
+
+
+class NewAddress(Network):
+    def setUp(self):
+        self.current = [LAN_IP]
+        super().setUp()
+        self.server.shutdown()
+        self.server.server_close()
+        addresses = lan.Addresses(lookup=lambda: list(self.current), retry_s=0)
+        self.server = create_server(self.office, 0, lan={"key": self.key, "addresses": addresses},
+                                    host="127.0.0.1", loopback=set())
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def test_the_new_ip_is_accepted(self):
+        self.current[:] = ["192.168.0.77"]
+        code, _, _ = self.request(f"/api/state?key={self.key}", host=f"192.168.0.77:{self.port}")
+        self.assertEqual(code, 302)
+
+    def test_without_key_nothing_is_shown(self):
+        self.skipTest("covered by Network")
+
+    def test_key_in_the_url_sets_the_cookie_and_is_removed(self):
+        self.skipTest("covered by Network")
+
+    def test_read_only_from_the_network(self):
+        self.skipTest("covered by Network")
+
+    def test_attempt_limit(self):
+        self.skipTest("covered by Network")
+
+    def test_lan_endpoint_hidden_from_the_network(self):
+        self.skipTest("covered by Network")
+
+
+class StartupMessage(unittest.TestCase):
+    def test_the_key_is_not_printed(self):
+        # server.log keeps stdout: the phone URL must not carry the key
+        line = lan.startup_line("192.168.0.10", 8765)
+        self.assertIn("http://192.168.0.10:8765/", line)
+        self.assertNotIn("key=", line)
+
+
 if __name__ == "__main__":
     unittest.main()

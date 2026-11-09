@@ -72,6 +72,7 @@ LOOPBACK = {"127.0.0.1", "::1"}
 
 def create_server(offices, port, lan=None, host=None, loopback=None):
     """`lan`: {"key", "addresses"} to accept network clients (see server/lan.py); None = only this computer.
+    "addresses" is a list or a server.lan.Addresses, which follows the IP if it changes.
     `host`: the address to listen on (by default 127.0.0.1, or every interface with `lan`).
     `loopback`: client addresses treated as this computer (tests pass an empty set to act as a phone)."""
     from .offices import Offices
@@ -86,10 +87,17 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
         def log_message(self, *args):
             pass
 
-        def allowed_hosts(self):
-            real = self.server.server_address[1]
-            names = ["127.0.0.1", "localhost"] + (list(lan["addresses"]) if lan else [])
-            return {f"{n}:{real}" for n in names}
+        def host_allowed(self, value):
+            """`value`: "name:port" from the Host header (or an Origin without its scheme)."""
+            name, _, port = (value or "").rpartition(":")
+            if port != str(self.server.server_address[1]):
+                return False
+            if name in ("127.0.0.1", "localhost"):
+                return True
+            if not lan:
+                return False
+            known = lan["addresses"]
+            return known.knows(name) if hasattr(known, "knows") else name in known
 
         def is_local(self):
             return self.client_address[0] in loopback
@@ -141,7 +149,7 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
             return False
 
         def do_GET(self):
-            if self.headers.get("Host") not in self.allowed_hosts():
+            if not self.host_allowed(self.headers.get("Host")):
                 return self.respond(421, {"error": "host no permitido"})
             url = urlsplit(self.path)
             q = parse_qs(url.query)
@@ -157,7 +165,8 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
                         return self.respond(404, {"error": "no existe"})
                     if not lan:
                         return self.respond(200, {"enabled": False, "url": None})
-                    ip = (lan["addresses"] or [None])[0]
+                    known = lan["addresses"]
+                    ip = ((known() if callable(known) else known) or [None])[0]
                     url_ = lan_access.phone_url(ip, self.server.server_address[1], lan["key"]) if ip else None
                     return self.respond(200, {"enabled": True, "url": url_})
                 if url.path == "/api/projects":
@@ -188,8 +197,6 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
                 return None
 
         def do_POST(self):
-            real = self.server.server_address[1]
-            hosts = self.allowed_hosts()
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -197,14 +204,15 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
             # The body is always read (with a cap) before answering: if a request is rejected without reading
             # it, Windows may reset the connection and the client never gets the error code
             body = self.rfile.read(length) if 0 < length <= MAX_LAYOUT_BYTES else b""
-            if self.headers.get("Host") not in hosts:
+            if not self.host_allowed(self.headers.get("Host")):
                 return self.respond(421, {"error": "host no permitido"})
             if not self.is_local():
                 # From the network the office is read-only: the floor editor is used from the computer
                 return self.respond(403, {"error": "desde otro dispositivo la oficina es de solo lectura"})
             # Only our own web: Origin equal to the server and a JSON body (another site cannot send
             # application/json without a preflight, and the preflight gets no CORS)
-            if self.headers.get("Origin") not in {f"http://{h}" for h in hosts}:
+            origin = self.headers.get("Origin") or ""
+            if not (origin.startswith("http://") and self.host_allowed(origin[len("http://"):])):
                 return self.respond(403, {"error": "origen no permitido"})
             if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
                 return self.respond(415, {"error": "se espera application/json"})
@@ -289,9 +297,9 @@ def run(offices, port, interval=0.5):
 
     threading.Thread(target=cycle, daemon=True).start()
     settings = lan_access.load(offices.data)
-    lan = {"key": settings["key"], "addresses": lan_access.local_addresses()} if settings else None
+    lan = {"key": settings["key"], "addresses": lan_access.Addresses()} if settings else None
     server = create_server(offices, port, lan=lan)
     print(f"Office at http://127.0.0.1:{port}/")
-    if lan and lan["addresses"]:
-        print(f"Phone (same Wi-Fi): {lan_access.phone_url(lan['addresses'][0], port, lan['key'])}")
+    if lan and lan["addresses"]():
+        print(lan_access.startup_line(lan["addresses"]()[0], port))
     server.serve_forever()
