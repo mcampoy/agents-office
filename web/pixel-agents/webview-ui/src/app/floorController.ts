@@ -194,7 +194,12 @@ export class FloorController {
   sync(snapshot: Snapshot, initial: boolean): void {
     const present = new Set<string>();
     const launched: Token[] = [];
-    for (const inst of snapshot.instances) {
+    // Seats go in arrival order: busy main agents (the current session first) sit down first, so on load the
+    // coordination desk is already theirs instead of an idle one handing it over across the hallway
+    const current = snapshot.main?.session;
+    const rank = (i: Instance) => (i.main ? (BUSY(i.state) ? (i.session === current ? 0 : 1) : 2) : 3);
+    const ordered = [...snapshot.instances].sort((a, b) => rank(a) - rank(b));
+    for (const inst of ordered) {
       if (!visibleOnFloor(inst)) continue;
       present.add(inst.key);
       let t = this.tokens.get(inst.key);
