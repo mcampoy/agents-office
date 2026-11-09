@@ -12,8 +12,8 @@ import type { Characters, Instance, Snapshot, SpritesConfig } from './types.ts';
 export const AVATAR_ID = 100000;
 /** A finished subagent rests in the lounge this long and then leaves the floor. */
 export const DONE_REST_S = 180;
-/** The avatar stays next to the main agent this long after a prompt. */
-const AVATAR_VISIT_S = 6;
+/** After a prompt, the "request" bubble stays over the avatar and the main agent this long. */
+const PROMPT_BUBBLE_S = 6;
 
 // Fixed zones the floor relies on (layout area ids)
 const LOUNGE = 'lounge';
@@ -56,9 +56,11 @@ export class FloorController {
   private byId = new Map<number, Token>();
   private nextId = 1;
   private spriteByType = new Map<string, number>();
-  private lastPrompt: string | null | undefined = undefined;
-  private visitUntil = 0;
-  private avatarVisiting = false;
+  /** Newest owner prompt seen (ms). Only a newer one counts: with several sessions open, the server's
+   *  "current" session alternates and last_prompt goes back and forth between their prompts. */
+  private lastPromptMs: number | undefined = undefined;
+  private promptUntil = 0;
+  private promptTo: number | null = null;
   private clock = 0;
 
   private os: OfficeState;
@@ -306,20 +308,16 @@ export class FloorController {
       this.os.addAgent(AVATAR_ID, this.characters.avatar, 0, seat, true);
       this.active(AVATAR_ID, true);
     }
-    const prompt = snapshot.owner.last_prompt;
-    if (this.lastPrompt !== undefined && prompt && prompt !== this.lastPrompt) {
-      // A new prompt from the owner: walks to the main agent's desk for a moment
+    const ms = snapshot.owner.last_prompt ? Date.parse(snapshot.owner.last_prompt) : NaN;
+    const seen = Number.isNaN(ms) ? -Infinity : ms;
+    if (this.lastPromptMs !== undefined && seen > this.lastPromptMs) {
+      // A new prompt from the owner: the avatar stays seated and a "request" bubble shows over it and the
+      // main agent for a moment (walking over read as an aimless stroll down the hallway)
       const session = snapshot.main?.session;
-      const p = session ? this.mainOf(session) : undefined;
-      const target = p ? this.nextTo(p.id) : null;
-      if (target) {
-        this.active(AVATAR_ID, false);
-        this.walkTo(AVATAR_ID, target);
-        this.avatarVisiting = true;
-        this.visitUntil = this.clock + AVATAR_VISIT_S + 4;
-      }
+      this.promptTo = (session ? this.mainOf(session)?.id : undefined) ?? null;
+      this.promptUntil = this.clock + PROMPT_BUBBLE_S;
     }
-    if (this.lastPrompt === undefined || !initial) this.lastPrompt = prompt;
+    if (this.lastPromptMs === undefined || !initial) this.lastPromptMs = Math.max(this.lastPromptMs ?? -Infinity, seen);
   }
 
   // --- Per frame -----------------------------------------------------------------------------
@@ -332,13 +330,12 @@ export class FloorController {
       this.still(ch, t.mode);
     }
     const av = this.os.characters.get(AVATAR_ID);
-    if (av) {
-      if (this.avatarVisiting && this.clock > this.visitUntil) {
-        this.avatarVisiting = false;
-        this.active(AVATAR_ID, true); // back to its desk
-      }
-      this.still(av, this.avatarVisiting ? 'walks' : 'seated');
-    }
+    if (av) this.still(av, 'seated');
+  }
+
+  /** Whether a character shows the "request" bubble of the owner's latest prompt (the avatar or the main agent). */
+  prompted(id: number): boolean {
+    return this.clock < this.promptUntil && (id === AVATAR_ID || id === this.promptTo);
   }
 
   /** Freezes the animation of those seated without working and stops the others from wandering. */

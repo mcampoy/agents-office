@@ -19,6 +19,7 @@ import {
   ERROR_BUBBLE,
   GOOGLE,
   HANDOFF_BUBBLE,
+  PROMPT_BUBBLE,
   MAGNIFIER,
   MAILBOX,
   MAILBOX_LIT,
@@ -186,12 +187,22 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
 
     if (!inst) {
       // The owner's avatar
-      if (compact) return null;
+      const asking = controller.prompted(id);
+      if (compact && !asking) return null;
       return (
-        <div key={id} className="absolute -translate-x-1/2 pointer-events-none" style={{ left: x, top: yFeet, zIndex: 30 }}>
-          <div className="ao-label" style={{ borderColor: '#e0b050' }}>
-            <span className="ao-name">{profile().owner_label}</span>
-          </div>
+        <div key={id}>
+          {asking && (
+            <div className="absolute -translate-x-1/2 -translate-y-full pointer-events-none" style={{ left: x, top: yHead, zIndex: 40 }} title="Nuevo pedido">
+              <Icon sprite={PROMPT_BUBBLE} scale={iconScale} />
+            </div>
+          )}
+          {!compact && (
+            <div className="absolute -translate-x-1/2 pointer-events-none" style={{ left: x, top: yFeet, zIndex: 30 }}>
+              <div className="ao-label" style={{ borderColor: '#e0b050' }}>
+                <span className="ao-name">{profile().owner_label}</span>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -203,6 +214,8 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
     else if (inst.state === 'handing_off') bubble = HANDOFF_BUBBLE;
     else if (inst.state === 'thinking') bubble = THINK_BUBBLE;
     else if (inst.state === 'idle') bubble = ZZZ;
+    // The owner's new request takes the place of the calm bubbles, never of waiting or error
+    if (controller.prompted(id) && inst.state !== 'waiting' && inst.state !== 'error') bubble = PROMPT_BUBBLE;
     const n = shortName(inst, byType.get(inst.type) ?? 1);
     const full = displayName(inst, byType.get(inst.type) ?? 1);
     const extra = inst.label && !inst.main ? inst.label : null;

@@ -54,6 +54,21 @@ export const HANDOFF_BUBBLE = sprite({ B: BORDER, F: '#b98cff', H: '#ffffff', G:
   '.....B.....',
 ]);
 
+/** The owner's new request: gold speech bubble with text lines (the owner's color). */
+export const PROMPT_BUBBLE = sprite({ B: BORDER, F: '#e0b050', T: '#2a2030', L: '#f3d58a' }, [
+  'BBBBBBBBBBB',
+  'BLLFFFFFFFB',
+  'BLTTTTTTFFB',
+  'BFFFFFFFFFB',
+  'BFTTTTTTTFB',
+  'BFFFFFFFFFB',
+  'BFTTTTFFFFB',
+  'BFFFFFFFFFB',
+  'BBBBBBBBBBB',
+  '..BBB......',
+  '..B........',
+]);
+
 /** Thinking: bubble with three dots (no open tool, the model is reasoning). */
 export const THINK_BUBBLE = sprite({ B: BORDER, F: '#e8eefa', P: '#5a78a8' }, [
   '.BBBBBBBBB.',
