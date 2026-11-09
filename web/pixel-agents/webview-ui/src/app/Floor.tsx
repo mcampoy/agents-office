@@ -88,6 +88,10 @@ const COMPACT_TILE_CSS = 13;
 
 export function Floor({ os, controller, snapshot, furniture, selection, onSelect, mobile = false, onOpenBoard }: Props) {
   const container = useRef<HTMLDivElement>(null);
+  /** The owner's boards: measured unscaled, so they can shrink to fit the office wall. */
+  const boardsRef = useRef<HTMLDivElement>(null);
+  /** Natural size of the full boards, measured while they are shown (decides when to switch to the short ones). */
+  const fullBoards = useRef<{ w: number; h: number } | null>(null);
   // Upstream editor: tools, undo and save. Saving goes to the profile's layout.json (transport.ts)
   const editor = useEditorActions(() => os, editorState);
   const panRef = editor.panRef;
@@ -270,15 +274,18 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
     // The owner's tray on their desk
     const av = os.characters.get(AVATAR_ID);
     const avatarSeat = av?.seatId ? os.seats.get(av.seatId) : null;
-    if (avatarSeat) {
-      const p = atTile(avatarSeat.seatCol + 2.2, avatarSeat.seatRow + 0.4);
-      const o = snapshot.owner;
+    // Only when something waits for the owner (the task count is on the Pendientes board): on the desk,
+    // below the avatar's name tag so it never covers it
+    const approvals = snapshot.owner.approvals;
+    if (avatarSeat && approvals > 0) {
+      const p = atTile(avatarSeat.seatCol + 0.5, avatarSeat.seatRow + 1.75);
       objects.push(
-        <div key="tray" className="absolute pointer-events-auto" style={{ ...p, zIndex: 32 }} title="Pendientes (pendientes.md) y aprobaciones en espera">
-          <div className="ao-object" style={{ borderColor: o.approvals > 0 ? STATE_COLOR.waiting : '#e0b050' }}>
+        <div key="tray" className="absolute -translate-x-1/2 pointer-events-auto" style={{ ...p, zIndex: 32 }} title="Aprobaciones en espera: se aprueban en la terminal de Claude Code">
+          <div className="ao-object" style={{ borderColor: STATE_COLOR.waiting }}>
             <Icon sprite={TRAY} scale={iconScale} />
-            <span>{o.tasks} pend.</span>
-            <span style={{ color: o.approvals > 0 ? STATE_COLOR.waiting : undefined }}>{o.approvals} aprob.</span>
+            <span style={{ color: STATE_COLOR.waiting }}>
+              {approvals} {approvals === 1 ? 'aprobación' : 'aprobaciones'}
+            </span>
           </div>
         </div>,
       );
@@ -366,7 +373,16 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
     const office = controller.rectangle(OWNER);
     if (office && snapshot.boards) {
       const b = snapshot.boards;
-      // One column with both boards: fixed spacing in pixels, so they do not overlap with small tiles
+      // They stand on the free floor below the owner's desk (clear of its name tag) and never leave the room:
+      // they shrink to the space down to the bottom wall and up to the corner bookshelf. When the full ones would
+      // be too small to read, each one becomes a single line with its key number
+      const tile = (TILE_SIZE * zoom) / dpr;
+      const top = avatarSeat ? Math.max(office.r0 + 1.4, avatarSeat.seatRow + 3) : office.r0 + 1.4;
+      const right = office.c1 + 1 - 2.2;
+      const freeH = (office.r1 + 1 - 0.25 - top) * tile;
+      const freeW = (right - office.c0 - 0.15) * tile;
+      const full = fullBoards.current;
+      const short = full !== null && Math.min(freeH / full.h, freeW / full.w) < 0.8;
       const boards: React.ReactNode[] = [];
       const board = (key: string, name: TabName, content: React.ReactNode, title: string) =>
         boards.push(
@@ -377,7 +393,12 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
       board(
         'board-tasks',
         'tasks',
-        <>
+        short ? (
+          <span className="ao-board-line">
+            <span className="ao-board-title">Pendientes</span>
+            <span style={{ color: STATE_COLOR.working }}>{b.tasks.in_progress.length}</span>
+          </span>
+        ) : <>
           <span className="ao-board-title">Pendientes</span>
           <span className="ao-board-counts">
             <span style={{ color: STATE_COLOR.working }}>{b.tasks.in_progress.length} en curso</span>
@@ -390,7 +411,12 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
       board(
         'board-audits',
         'audits',
-        <>
+        short ? (
+          <span className="ao-board-line">
+            <span className="ao-board-title">Auditorías</span>
+            <span style={{ color: b.audits.open.length ? STATE_COLOR.error : STATE_COLOR.idle }}>{b.audits.open.length}</span>
+          </span>
+        ) : <>
           <span className="ao-board-title">Auditorías</span>
           <span className="ao-board-counts">
             <span style={{ color: b.audits.open.length ? STATE_COLOR.error : STATE_COLOR.idle }}>{b.audits.open.length} abiertas</span>
@@ -398,8 +424,18 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
         </>,
         `Tablón de auditorías: ${b.audits.open.length} fricciones abiertas, ${b.audits.resolved.length} resueltas`,
       );
+      // offsetWidth/Height ignore the transform: they are the unscaled size of what is shown
+      const shown = boardsRef.current;
+      if (shown && shown.offsetHeight && !short) fullBoards.current = { w: shown.offsetWidth, h: shown.offsetHeight };
+      const fit = shown && shown.offsetHeight ? Math.min(1, freeH / shown.offsetHeight, freeW / shown.offsetWidth) : 1;
       objects.push(
-        <div key="boards" className="absolute ao-boards" style={{ ...atTile(office.c0 + 0.15, office.r0 + 1.6), zIndex: 33 }}>
+        <div
+          key="boards"
+          ref={boardsRef}
+          className={`absolute ao-boards ${short ? '' : 'ao-boards-row'}`}
+          // Under the name tags (zIndex 30), so the owner's tag is never covered
+          style={{ ...atTile(office.c0 + 0.15, top), zIndex: 29, transform: `scale(${Math.max(0.6, fit)})`, transformOrigin: 'top left' }}
+        >
           {boards}
         </div>,
       );

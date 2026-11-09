@@ -589,6 +589,12 @@ details.ao-item p {
   color: #e0b050;
   font-size: 14px;
 }
+.ao-board-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
 .ao-board-counts {
   display: flex;
   flex-direction: column;
@@ -657,6 +663,10 @@ details.ao-item p {
   flex-direction: column;
   gap: 4px;
   align-items: flex-start;
+}
+.ao-boards-row {
+  flex-direction: row;
+  gap: 8px;
 }
 
 /* --- Phone access (button in the desktop header) ---------------------------------------------------- */
