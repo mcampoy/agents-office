@@ -156,6 +156,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "{script}"
 ```
 
 - Si dice que la oficina ya está corriendo o que la levantó, contestá en una línea con la URL que imprimió.
+- Si imprime una URL para el celular, pasala también: se abre desde el celular conectado al mismo Wi-Fi.
 - Si dice que el python.exe registrado ya no existe, decí que hay que reinstalar con `py -3 scripts\\install.py` en `{repo}`.
 - Si avisa que falta la web compilada, decilo: se ve la vista básica hasta compilar `web\\pixel-agents` con `npm run build`.
 - La oficina es de solo lectura: no ofrezcas aprobar permisos ni lanzar agentes desde ella.
