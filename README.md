@@ -51,7 +51,7 @@ Pruebas: `py -3 -m unittest discover -s tests` (siempre con el perfil de ejemplo
 
 ## Licencias
 
-- Código propio: ver `LICENSE` (pendiente de definir).
+- Código propio: MIT, © 2026 Matías Campoy. Ver `LICENSE`.
 - Motor y assets de Pixel Agents (`web/pixel-agents/core`, `web/pixel-agents/webview-ui`): MIT, © 2026 Pablo De Lucca. Ver `web/pixel-agents/LICENSE` y `web/pixel-agents/ORIGEN.md`.
 - Personajes: basados en el pack MetroCity de JIK-A-4 (CC0). Las variantes y el avatar se generan en build: ver [docs/avatar.md](docs/avatar.md).
 - Fuente VT323: SIL Open Font License 1.1 (`web/pixel-agents/webview-ui/public-idi/fonts/OFL-VT323.txt`).
