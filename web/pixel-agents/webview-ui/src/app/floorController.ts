@@ -12,7 +12,13 @@ import type { Characters, Instance, Snapshot, SpritesConfig } from './types.ts';
 export const AVATAR_ID = 100000;
 /** A finished subagent rests in the lounge this long and then leaves the floor. */
 export const DONE_REST_S = 180;
-/** After a prompt, the "request" bubble stays over the avatar and the main agent this long. */
+/** The owner stays this long at the main agent's desk after a prompt (from arrival). */
+const OWNER_DWELL_S = 5;
+/** The main agent stays this long at each subagent's desk when delegating. */
+const DELEGATE_DWELL_S = 3;
+/** A visit that never arrives (blocked path) gives up after this long. */
+const VISIT_TIMEOUT_S = 40;
+/** If the owner cannot walk to the main agent, the request bubble shows at the desk this long. */
 const PROMPT_BUBBLE_S = 6;
 
 // Fixed zones the floor relies on (layout area ids)
@@ -22,6 +28,18 @@ const RECEPTION = 'reception';
 const OWNER = 'owner';
 
 type Mode = 'works' | 'seated' | 'standing' | 'walks' | 'sofa';
+
+/** A character that walks to another one's desk to ask for something, waits there and goes back. */
+interface Visit {
+  to: number;
+  dwell: number;
+  startedAt: number;
+  arrivedAt: number | null;
+  /** Characters to visit next, in order (a main agent launching several subagents). */
+  then: number[];
+}
+
+const BUSY = (state: string) => state !== 'idle' && state !== 'done';
 
 interface Token {
   id: number;
@@ -60,7 +78,7 @@ export class FloorController {
    *  "current" session alternates and last_prompt goes back and forth between their prompts. */
   private lastPromptMs: number | undefined = undefined;
   private promptUntil = 0;
-  private promptTo: number | null = null;
+  private visits = new Map<number, Visit>();
   private clock = 0;
 
   private os: OfficeState;
@@ -175,6 +193,7 @@ export class FloorController {
 
   sync(snapshot: Snapshot, initial: boolean): void {
     const present = new Set<string>();
+    const launched: Token[] = [];
     for (const inst of snapshot.instances) {
       if (!visibleOnFloor(inst)) continue;
       present.add(inst.key);
@@ -186,6 +205,7 @@ export class FloorController {
         t = { id, key: inst.key, inst, mode: null, target: null };
         this.tokens.set(inst.key, t);
         this.byId.set(id, t);
+        if (!initial && !inst.main) launched.push(t);
       }
       t.inst = inst;
     }
@@ -197,7 +217,58 @@ export class FloorController {
       }
     }
     for (const t of this.tokens.values()) this.applyState(t);
+    this.coordination(snapshot);
+    this.delegate(launched);
     this.avatar(snapshot, initial);
+  }
+
+  /** The main agents' room has room for one: it belongs to a main agent that is working. An idle or finished
+   *  one gives up the desk to a busy one (they swap seats); a busy one is never moved, so two sessions
+   *  working at the same time do not swap back and forth. */
+  private coordination(snapshot: Snapshot): void {
+    const mains = [...this.tokens.values()].filter((t) => t.inst.main);
+    const zone = mains[0]?.inst.zone;
+    if (!zone) return;
+    const seatOf = (t: Token) => this.os.characters.get(t.id)?.seatId ?? null;
+    const inZone = (t: Token) => {
+      const seat = seatOf(t);
+      return seat !== null && this.os.seatZone(seat) === zone;
+    };
+    const current = snapshot.main?.session;
+    const waiting = mains
+      .filter((t) => !inZone(t) && BUSY(t.inst.state) && !this.visits.has(t.id))
+      .sort((a, b) => Number(b.inst.session === current) - Number(a.inst.session === current));
+    for (const c of waiting) {
+      const free = this.free(zone)[0];
+      if (free) {
+        this.os.reassignSeat(c.id, free);
+        continue;
+      }
+      const holder = mains.find((t) => inZone(t) && !BUSY(t.inst.state) && !this.visits.has(t.id));
+      if (!holder) return;
+      const theirs = seatOf(holder)!;
+      const mine = seatOf(c) ?? this.free(FLOATING)[0] ?? this.free(RECEPTION)[0];
+      if (!mine) return;
+      // reassignSeat only takes a free seat: free the newcomer's seat for the holder, then take the holder's
+      const seat = this.os.seats.get(mine)!;
+      seat.assigned = false;
+      this.os.reassignSeat(holder.id, mine);
+      this.os.reassignSeat(c.id, theirs);
+      seat.assigned = true;
+    }
+  }
+
+  /** A main agent that launches subagents leaves its office and asks each one in person. */
+  private delegate(launched: Token[]): void {
+    const bySession = new Map<string, number[]>();
+    for (const t of launched) bySession.set(t.inst.session, [...(bySession.get(t.inst.session) ?? []), t.id]);
+    for (const [session, subs] of bySession) {
+      const main = this.mainOf(session);
+      if (!main) continue;
+      const ongoing = this.visits.get(main.id);
+      if (ongoing) ongoing.then.push(...subs);
+      else this.visitFrom(main.id, subs, DELEGATE_DWELL_S);
+    }
   }
 
   private mainOf(session: string): Token | undefined {
@@ -237,6 +308,11 @@ export class FloorController {
     }
     const changed = mode !== t.mode;
     t.mode = mode;
+    if (this.visits.has(t.id)) {
+      // Out asking someone: goes back to its desk when the visit ends
+      this.os.setAgentTool(t.id, null);
+      return;
+    }
     if (mode === 'works') {
       this.active(t.id, true);
       this.os.setAgentTool(t.id, i.animation === 'read' ? 'Read' : 'Write');
@@ -311,11 +387,10 @@ export class FloorController {
     const ms = snapshot.owner.last_prompt ? Date.parse(snapshot.owner.last_prompt) : NaN;
     const seen = Number.isNaN(ms) ? -Infinity : ms;
     if (this.lastPromptMs !== undefined && seen > this.lastPromptMs) {
-      // A new prompt from the owner: the avatar stays seated and a "request" bubble shows over it and the
-      // main agent for a moment (walking over read as an aimless stroll down the hallway)
+      // A new prompt from the owner: walks to the main agent's desk (Coordination) to ask in person
       const session = snapshot.main?.session;
-      this.promptTo = (session ? this.mainOf(session)?.id : undefined) ?? null;
-      this.promptUntil = this.clock + PROMPT_BUBBLE_S;
+      const p = session ? this.mainOf(session) : undefined;
+      if (!p || !this.visitFrom(AVATAR_ID, [p.id], OWNER_DWELL_S)) this.promptUntil = this.clock + PROMPT_BUBBLE_S;
     }
     if (this.lastPromptMs === undefined || !initial) this.lastPromptMs = Math.max(this.lastPromptMs ?? -Infinity, seen);
   }
@@ -327,15 +402,62 @@ export class FloorController {
     for (const t of this.tokens.values()) {
       const ch = this.os.characters.get(t.id);
       if (!ch) continue;
-      this.still(ch, t.mode);
+      this.still(ch, this.visits.has(t.id) ? 'walks' : t.mode);
     }
     const av = this.os.characters.get(AVATAR_ID);
-    if (av) this.still(av, 'seated');
+    if (av) this.still(av, this.visits.has(AVATAR_ID) ? 'walks' : 'seated');
+    this.advanceVisits();
   }
 
-  /** Whether a character shows the "request" bubble of the owner's latest prompt (the avatar or the main agent). */
+  // --- Visits --------------------------------------------------------------------------------
+
+  /** Starts a visit to the first reachable character of the list. False if none can be reached. */
+  private visitFrom(id: number, targets: number[], dwell: number): boolean {
+    const queue = [...targets];
+    while (queue.length) {
+      const to = queue.shift()!;
+      const tile = this.os.characters.has(to) ? this.nextTo(to) : null;
+      if (!tile) continue;
+      this.active(id, false);
+      if (!this.os.walkToTile(id, tile.col, tile.row)) continue;
+      this.visits.set(id, { to, dwell, startedAt: this.clock, arrivedAt: null, then: queue });
+      return true;
+    }
+    return false;
+  }
+
+  private advanceVisits(): void {
+    for (const [id, v] of this.visits) {
+      const ch = this.os.characters.get(id);
+      if (!ch || !this.os.characters.has(v.to)) {
+        this.endVisit(id, v);
+        continue;
+      }
+      if (v.arrivedAt === null && ch.state !== CharacterState.WALK) v.arrivedAt = this.clock;
+      const done = v.arrivedAt !== null && this.clock > v.arrivedAt + v.dwell;
+      if (done || this.clock > v.startedAt + VISIT_TIMEOUT_S) this.endVisit(id, v);
+    }
+  }
+
+  private endVisit(id: number, v: Visit): void {
+    this.visits.delete(id);
+    if (v.then.length && this.visitFrom(id, v.then, v.dwell)) return;
+    this.active(id, true); // back to its desk
+    const t = this.byId.get(id);
+    if (t) {
+      t.mode = null;
+      this.applyState(t);
+      // An idle one goes inactive, which drops the path: send it back to its desk anyway
+      if (t.mode === 'standing') this.os.sendToSeat(id);
+    }
+  }
+
+  /** Whether a character shows the "request" bubble: the one asking and the one asked, once face to face
+   *  (or the owner at its desk when the main agent could not be reached). */
   prompted(id: number): boolean {
-    return this.clock < this.promptUntil && (id === AVATAR_ID || id === this.promptTo);
+    if (id === AVATAR_ID && this.clock < this.promptUntil) return true;
+    for (const [from, v] of this.visits) if (v.arrivedAt !== null && (from === id || v.to === id)) return true;
+    return false;
   }
 
   /** Freezes the animation of those seated without working and stops the others from wandering. */
