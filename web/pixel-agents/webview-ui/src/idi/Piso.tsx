@@ -18,6 +18,7 @@ import {
   BURBUJA_ENTREGA,
   BURBUJA_ERROR,
   BURBUJA_ESPERA,
+  BURBUJA_PIENSA,
   BUZON,
   BUZON_ENCENDIDO,
   ESTRELLA,
@@ -190,6 +191,7 @@ export function Piso({ os, control, foto, muebles, seleccion, onSeleccion, movil
     if (inst.estado === 'esperando') burbuja = BURBUJA_ESPERA;
     else if (inst.estado === 'error') burbuja = BURBUJA_ERROR;
     else if (inst.estado === 'entregando') burbuja = BURBUJA_ENTREGA;
+    else if (inst.estado === 'pensando') burbuja = BURBUJA_PIENSA;
     else if (inst.estado === 'ocioso') burbuja = ZZZ;
     const n = nombreCorto(inst, porTipo.get(inst.tipo) ?? 1);
     const completo = nombre(inst, porTipo.get(inst.tipo) ?? 1);

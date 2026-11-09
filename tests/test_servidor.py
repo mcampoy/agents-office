@@ -835,5 +835,35 @@ class PerfilDeEquipo(unittest.TestCase):
             self.assertEqual(o.foto["responsable"]["pendientes"], 0)
 
 
+class PensandoYSubagentesOciosos(unittest.TestCase):
+    """Decisiones del 09/11: 'pensando' entre la actividad reciente y el ocio, y partner no espera a ociosos."""
+
+    def secuencia(self):
+        return [principal(0, "SessionStart", resumen={"source": "startup"}),
+                principal(1, "UserPromptSubmit", resumen={"largo": 10, "origen": "usuario"}),
+                principal(2, "PreToolUse", tool_name="Agent", tool_use_id="L",
+                          resumen={"subagent_type": "investigador-proveedor", "description": "X"}),
+                principal(3, "PostToolUse", tool_name="Agent", tool_use_id="L",
+                          resumen={"subagent_type": "investigador-proveedor", "agente_lanzado": "a1"}),
+                sub(4, "SubagentStart", "a1", "investigador-proveedor"),
+                sub(5, "PreToolUse", "a1", "investigador-proveedor", tool_name="Read", tool_use_id="r"),
+                sub(6, "PostToolUse", "a1", "investigador-proveedor", tool_name="Read", tool_use_id="r"),
+                principal(7, "Stop")]
+
+    def estado(self, segundos, clave):
+        m = modelo(self.secuencia())
+        return instancias(m.foto(T0 + dt.timedelta(seconds=segundos)))[clave]
+
+    def test_pensando_entre_actividad_y_ocio(self):
+        self.assertEqual(self.estado(60, "a1")["estado"], "trabajando")
+        e = self.estado(150, "a1")
+        self.assertEqual((e["estado"], e["animacion"]), ("pensando", "piensa"))
+        self.assertEqual(self.estado(400, "a1")["estado"], "ocioso")
+
+    def test_partner_no_espera_subagentes_ociosos(self):
+        self.assertEqual(self.estado(150, "s1:principal")["estado"], "esperando_subagentes")  # a1 pensando
+        self.assertEqual(self.estado(400, "s1:principal")["estado"], "ocioso")  # a1 ocioso: ya no lo espera
+
+
 if __name__ == "__main__":
     unittest.main()

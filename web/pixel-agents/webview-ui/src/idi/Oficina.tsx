@@ -155,7 +155,7 @@ function Tarjetas({
   const porTipo = new Map<string, number>();
   for (const i of instancias) porTipo.set(i.tipo, (porTipo.get(i.tipo) ?? 0) + 1);
   // Lo que necesita atención primero
-  const orden = { esperando: 0, error: 1, entregando: 2, trabajando: 3, esperando_subagentes: 4, terminado: 5, ocioso: 6 };
+  const orden = { esperando: 0, error: 1, entregando: 2, trabajando: 3, pensando: 4, esperando_subagentes: 5, terminado: 6, ocioso: 7 };
   const ordenadas = [...instancias].sort((a, b) => Number(b.principal) - Number(a.principal) || orden[a.estado] - orden[b.estado]);
   return (
     <footer className={modo === 'lista' ? 'idi-lista' : 'idi-tarjetas'}>

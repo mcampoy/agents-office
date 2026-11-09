@@ -21,7 +21,7 @@ ARCHIVOS_ESCRITOS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 ESPERAS_NOTIFICACION = {"permission_prompt", "agent_needs_input"}
 
 UMBRALES = {
-    "actividad_reciente_s": 90,   # sin herramienta abierta pero con eventos recientes: sigue trabajando
+    "actividad_reciente_s": 90,   # sin herramienta abierta pero con eventos recientes: sigue trabajando; después, pensando
     "ocioso_s": 300,              # N minutos sin eventos con la sesión abierta
     "error_s": 120,               # cuánto dura la burbuja de error
     "retiro_general_s": 120,      # un agente general se retira del piso tras terminar
@@ -354,9 +354,16 @@ class Modelo:
 
     # --- Salida -----------------------------------------------------------------
 
-    def subagentes_activos(self, inst):
-        return [i for i in self.instancias.values()
-                if not i.es_principal and i.sesion == inst.sesion and i.fin is None]
+    def subagentes_activos(self, inst, ahora=None):
+        """Subagentes de la sesión que siguen vivos. Con `ahora`, los ociosos (sin eventos hace más de
+        ocioso_s, sin herramienta abierta ni espera) no cuentan: la principal no los está esperando."""
+        vivos = [i for i in self.instancias.values()
+                 if not i.es_principal and i.sesion == inst.sesion and i.fin is None]
+        if ahora is None:
+            return vivos
+        limite = self.umbrales["ocioso_s"]
+        return [i for i in vivos if i.abiertas or i.espera is not None or i.ultimo_evento is None
+                or (ahora - i.ultimo_evento).total_seconds() <= limite]
 
     def estado_de(self, inst, ahora):
         u = self.umbrales
@@ -373,7 +380,7 @@ class Modelo:
             return "trabajando", inst.inicio_racha
         if inst.turno_terminado is not None:
             # La principal terminó su turno pero lanzó subagentes que siguen: no está terminada.
-            if inst.es_principal and self.subagentes_activos(inst):
+            if inst.es_principal and self.subagentes_activos(inst, ahora):
                 return "esperando_subagentes", inst.turno_terminado
             if (ahora - inst.turno_terminado).total_seconds() > u["ocioso_s"]:
                 return "ocioso", inst.turno_terminado
@@ -382,12 +389,16 @@ class Modelo:
             return "trabajando", inst.inicio_racha
         if inst.ultimo_evento and (ahora - inst.ultimo_evento).total_seconds() > u["ocioso_s"]:
             return "ocioso", inst.ultimo_evento
+        # Sin herramienta abierta ni eventos recientes, pero todavía no ocioso: el modelo está pensando
+        if inst.ultimo_evento:
+            return "pensando", inst.ultimo_evento
         return "trabajando", inst.inicio_racha
 
     def animacion(self, inst, estado):
         if estado != "trabajando":
             return {"terminado": "se_retira", "esperando": "espera", "error": "error", "ocioso": "idle",
-                    "entregando": "entrega", "esperando_subagentes": "espera_subagentes"}[estado]
+                    "entregando": "entrega", "esperando_subagentes": "espera_subagentes",
+                    "pensando": "piensa"}[estado]
         abierta = next(iter(inst.abiertas.values()), None)
         h = (abierta or {}).get("herramienta") or inst.ultima_herramienta or ""
         if h in LECTURA or h.startswith("mcp__playwright") or h.startswith("mcp__claude_ai_Google_Drive__read"):

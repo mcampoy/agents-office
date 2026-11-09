@@ -8,6 +8,7 @@ export const COLOR_ESTADO: Record<Estado, string> = {
   error: '#ff5c5c',
   entregando: '#b98cff',
   esperando_subagentes: '#7fd6e8',
+  pensando: '#8fb3e0',
   terminado: '#8fd48a',
   ocioso: '#b4b4c8',
 };
@@ -26,6 +27,8 @@ export function textoEstado(i: Instancia, subagentesActivos = 0): string {
       return subagentesActivos > 0 ? `espera ${subagentesActivos} subagente${subagentesActivos > 1 ? 's' : ''}` : 'espera subagentes';
     case 'terminado':
       return i.principal ? 'turno terminado' : 'terminado';
+    case 'pensando':
+      return 'pensando';
     case 'ocioso':
       return 'ocioso';
   }

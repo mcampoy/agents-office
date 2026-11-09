@@ -7,10 +7,11 @@ export type Estado =
   | 'error'
   | 'entregando'
   | 'esperando_subagentes'
+  | 'pensando'
   | 'terminado'
   | 'ocioso';
 
-export type Animacion = 'lee' | 'escribe' | 'espera' | 'error' | 'idle' | 'se_retira' | 'entrega' | 'espera_subagentes';
+export type Animacion = 'lee' | 'escribe' | 'espera' | 'error' | 'idle' | 'se_retira' | 'entrega' | 'espera_subagentes' | 'piensa';
 
 export interface Instancia {
   clave: string;

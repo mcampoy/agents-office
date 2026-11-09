@@ -214,6 +214,7 @@ export class ControlPiso {
       case 'esperando':
       case 'error':
       case 'esperando_subagentes':
+      case 'pensando':
         modo = 'sentado';
         break;
       case 'entregando':

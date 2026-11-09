@@ -54,6 +54,18 @@ export const BURBUJA_ENTREGA = sprite({ B: BORDE, F: '#b98cff', H: '#ffffff', G:
   '.....B.....',
 ]);
 
+/** Pensando: burbuja con tres puntos (sin herramienta abierta, el modelo está razonando). */
+export const BURBUJA_PIENSA = sprite({ B: BORDE, F: '#e8eefa', P: '#5a78a8' }, [
+  '.BBBBBBBBB.',
+  'BFFFFFFFFFB',
+  'BFFFFFFFFFB',
+  'BFPFFPFFPFB',
+  'BFFFFFFFFFB',
+  '.BBBBBBBBB.',
+  '..BB.......',
+  '.B.........',
+]);
+
 /** Ocioso: "z" chiquitas. */
 export const ZZZ = sprite({ Z: '#c8c8e0' }, [
   '.....ZZZZ',
