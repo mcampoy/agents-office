@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Build del piso de la oficina sobre el webview de Pixel Agents (MIT). Solo se usa para compilar; en uso diario no corre Node.",
   "scripts": {
-    "sprites": "node idi/sprites.mjs",
-    "build": "npm run sprites && vite build --config webview-ui/vite.idi.config.ts",
-    "dev": "vite --config webview-ui/vite.idi.config.ts",
-    "typecheck": "tsc -p webview-ui/tsconfig.idi.json"
+    "sprites": "node tools/sprites.mjs",
+    "build": "npm run sprites && vite build --config webview-ui/vite.office.config.ts",
+    "dev": "vite --config webview-ui/vite.office.config.ts",
+    "typecheck": "tsc -p webview-ui/tsconfig.office.json"
   },
   "dependencies": {
     "@material-symbols/font-700": "^0.46.0",

@@ -1,0 +1,48 @@
+{
+  "_comment": "Zona de cada agente. Patrones con '*' (por ejemplo 'lente-*'). Gana la primera regla que coincide. Un agente sin regla va a la recepción con la marca 'sin zona'.",
+  "rules": [
+    {
+      "agent": "partner",
+      "zone": "coordination"
+    },
+    {
+      "agent": "investigador-proveedor",
+      "zone": "exploration"
+    },
+    {
+      "agent": "radar",
+      "zone": "exploration"
+    },
+    {
+      "agent": "verificador",
+      "zone": "verification"
+    },
+    {
+      "agent": "lente-*",
+      "zone": "reading"
+    },
+    {
+      "agent": "redactor",
+      "zone": "base"
+    },
+    {
+      "agent": "editor-comunicacion",
+      "zone": "communication"
+    },
+    {
+      "agent": "maquetador",
+      "zone": "communication"
+    }
+  ],
+  "_generic": "Agentes sin definición propia en .claude/agents: escritorio flotante temporal.",
+  "generic": [
+    "general-purpose",
+    "Explore",
+    "Plan",
+    "claude",
+    "claude-code-guide",
+    "statusline-setup"
+  ],
+  "generic_zone": "floating",
+  "unzoned_zone": "reception"
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oficina · vista básica</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 1.5rem; background: #111; color: #ddd; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; } h2 { font-size: 1rem; margin: 1.5rem 0 .5rem; color: #9cf; }
+  .note { color: #888; } table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #333; vertical-align: top; }
+  .state { font-weight: 600; } .working { color: #6c6; } .waiting { color: #fc3; } .error { color: #f66; }
+  .done { color: #8ac; } .idle { color: #888; } .notice { background: #532; padding: .5rem; margin: .5rem 0; }
+</style>
+</head>
+<body>
+<!-- Text view served while the compiled web (web/dist) does not exist. Visible texts are Spanish (UI). -->
+<h1>Oficina · vista básica</h1>
+<p class="note">Vista de texto: falta compilar la web (web/pixel-agents, npm run build). <span id="connection">conectando…</span></p>
+<div id="notices"></div>
+<h2>Agentes</h2><table id="agents"></table>
+<h2>Aprobaciones en espera</h2><table id="approvals"></table>
+<h2>Documentos en curso</h2><table id="documents"></table>
+<h2>Responsable y corrida programada</h2><p id="owner"></p>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const dur = s => s == null ? "" : s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+const rows = (head, data) => `<tr>${head.map(c => `<th>${c}</th>`).join("")}</tr>` + data.map(f => `<tr>${f.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+const STATE_TEXT = {working: "trabajando", waiting: "esperando", error: "error", handing_off: "entregando",
+  waiting_subagents: "espera subagentes", thinking: "pensando", done: "terminado", idle: "ocioso"};
+
+function render(s) {
+  $("notices").innerHTML = (s.notices || []).map(n =>
+    `<div class="notice">Reiniciar la sesión para aplicar los cambios en: ${esc(n.agents.join(", "))}</div>`).join("");
+  $("agents").innerHTML = rows(["Agente", "Estado", "Desde", "Modelo", "Herramienta", "Recurso", "Documento", "Zona"],
+    s.instances.map(i => [
+      `${esc(i.type)}${i.main ? "" : " #" + i.number}${i.label ? " · " + esc(i.label) : ""}`,
+      `<span class="state ${i.state}">${STATE_TEXT[i.state] ?? i.state}</span>${i.wait ? " (" + (i.wait.kind === "permission" ? "permiso" : "respuesta") + ")" : ""}`,
+      dur(i.seconds_in_state), esc(i.model), esc(i.tool), esc(i.resource), esc(i.document),
+      esc(i.zone) + (i.unzoned ? " · sin zona" : "")]));
+  $("approvals").innerHTML = s.approvals.length ? rows(["Instancia", "Herramienta", "Recurso", "Desde"],
+    s.approvals.map(a => [esc(a.instance), esc(a.tool), esc(a.resource), esc(a.since)])) : "<tr><td>Nada en espera.</td></tr>";
+  $("documents").innerHTML = s.documents.length ? rows(["Documento", "Tipo", "Etapa", "Estado", "Cruces", "Espera"],
+    s.documents.map(d => [esc(d.path), esc(d.type), esc(d.stage), esc(d.header?.status),
+      d.verifications.map(v => esc(v.document_type + " " + v.label)).join(", "), esc(d.owner_wait)])) : "<tr><td>Sin documentos tocados hoy.</td></tr>";
+  const o = s.owner, c = s.clock;
+  $("owner").textContent = `Pendientes: ${o.tasks} · aprobaciones en espera: ${o.approvals}` +
+    (c.next ? ` · corrida programada: última ${c.last ?? "—"}, próxima ${c.next}${c.running ? " (en curso)" : ""}` : "") +
+    (s.health.hook_errors_24h ? ` · errores del hook (24 h): ${s.health.hook_errors_24h}` : "");
+}
+
+fetch("/api/state").then(r => r.json()).then(render);
+const source = new EventSource("/api/stream");
+source.addEventListener("state", e => { $("connection").textContent = "en vivo"; render(JSON.parse(e.data)); });
+source.onerror = () => { $("connection").textContent = "reconectando…"; };
+</script>
+</body>
+</html>

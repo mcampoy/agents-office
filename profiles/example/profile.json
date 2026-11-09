@@ -1,0 +1,80 @@
+{
+  "_comment": "Perfil de ejemplo: un equipo de investigación ficticio. Copialo a otra carpeta y adaptalo (docs/profile.md).",
+  "name": "Oficina de ejemplo",
+  "area_root": null,
+  "team_dir": "equipo",
+  "port": 8765,
+  "roots": [
+    "equipo",
+    "radar",
+    "researches",
+    "data-security-governance"
+  ],
+  "files": {
+    "tasks": "equipo/pendientes.md",
+    "frictions": "equipo/fricciones.md",
+    "decisions": "equipo/decisiones.md",
+    "remember": "equipo/.remember",
+    "status": "equipo/status"
+  },
+  "main_agent": "partner",
+  "verifier": "verificador",
+  "owner_label": "responsable",
+  "scripts": {
+    "known": [
+      "detector-cambios.py",
+      "corrida-semanal.py"
+    ],
+    "mailbox": "notificar.py",
+    "channels": [
+      "radar",
+      "researches"
+    ],
+    "default_channel": "avisos",
+    "checks": [
+      "comprobar-citas.py",
+      "revisar-estilo.ps1"
+    ]
+  },
+  "scheduled_run": {
+    "agent": "radar",
+    "weekday": 2,
+    "hour": 10,
+    "origin_variable": {
+      "name": "OFICINA_CORRIDA",
+      "value": "1"
+    }
+  },
+  "floor": {
+    "rooms": {
+      "owner": "Responsable",
+      "coordination": "Coordinación",
+      "exploration": "Exploración",
+      "verification": "Verificación",
+      "lounge": "Zona común",
+      "reception": "Recepción",
+      "reading": "Lectura",
+      "base": "Sala base",
+      "communication": "Comunicación",
+      "floating": "Flotantes"
+    },
+    "short_names": {
+      "investigador-proveedor": "investigador",
+      "editor-comunicacion": "editor com.",
+      "general-purpose": "general"
+    },
+    "accessories": {
+      "lente-*": "magnifier"
+    },
+    "external_work": {
+      "maquetador": {
+        "icon": "google",
+        "tools": "drive|docs|slides|sheets|google"
+      }
+    },
+    "next_to_clock": "radar",
+    "lights_off": [
+      "communication"
+    ]
+  }
+}
