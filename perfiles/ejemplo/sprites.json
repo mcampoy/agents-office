@@ -1,8 +1,0 @@
-{
-  "_comentario": "Sprite de cada agente. Sin entrada, se asigna uno de forma determinística a partir del nombre. 'sprite' es el índice de la hoja (ver web/dist/assets/decoded/personajes.json: 0-23 personajes, 24 el avatar). Los patrones con '*' valen igual que en zonas.json.",
-  "agentes": {
-    "partner": { "sprite": 0 },
-    "verificador": { "sprite": 2 },
-    "radar": { "sprite": 3 }
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.app.json",
-  "compilerOptions": {
-    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.idi.tsbuildinfo",
-    "resolveJsonModule": true
-  },
-  "include": ["src/idi", "src/vite-env.d.ts"]
-}
