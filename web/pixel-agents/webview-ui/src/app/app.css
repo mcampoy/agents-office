@@ -58,7 +58,9 @@
 
 .ao-screen {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Without this the column grows to the longest unwrapped text and the header spills off-screen */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
 }
 
