@@ -6,6 +6,8 @@
 // asientos, etc.) se descarta.
 import type { MessageTransport } from '../../../core/src/transport.js';
 
+import { api } from './api.ts';
+
 export type EstadoGuardado = { estado: 'guardando' | 'guardado' | 'error'; detalle?: string };
 const oyentes = new Set<(e: EstadoGuardado) => void>();
 
@@ -22,7 +24,7 @@ function avisar(e: EstadoGuardado): void {
 async function guardarLayout(layout: unknown): Promise<void> {
   avisar({ estado: 'guardando' });
   try {
-    const r = await fetch('./api/layout', {
+    const r = await fetch(api('layout'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(layout),

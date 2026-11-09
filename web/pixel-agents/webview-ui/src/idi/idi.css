@@ -561,3 +561,98 @@ details.idi-item p {
   font-size: 16px;
   margin: 0;
 }
+
+/* --- Tablones y selector de proyecto ------------------------------------------------------------------ */
+.idi-tablon {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 3px 7px 4px;
+  background: #3b2a1c;
+  border: 3px solid #8a5a2b;
+  box-shadow: inset 0 0 0 1px #c08850, var(--shadow-pixel);
+  color: #f3e6d0;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.idi-tablon:hover,
+.idi-tablon:focus-visible {
+  border-color: #e0b050;
+  outline: none;
+}
+.idi-tablon-titulo {
+  color: #e0b050;
+  font-size: 14px;
+}
+.idi-tablon-cuentas {
+  display: flex;
+  flex-direction: column;
+}
+.idi-selector {
+  background: var(--color-bg-dark);
+  color: #e0b050;
+  border: 2px solid var(--color-border);
+  font: inherit;
+  font-size: 18px;
+  padding: 1px 6px;
+  max-width: 260px;
+}
+.idi-columnas {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.idi-columna {
+  border-top: 3px solid var(--color-border);
+}
+.idi-columna .idi-subtitulo {
+  margin-top: 6px;
+}
+.idi-resueltas > summary {
+  cursor: pointer;
+}
+
+/* --- Sesión (statusline) --------------------------------------------------------------------------------- */
+.idi-cabecera {
+  flex-wrap: wrap;
+}
+.idi-sesion {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.idi-ctx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.idi-barra {
+  display: inline-block;
+  width: 48px;
+  height: 8px;
+  background: #2b2b40;
+  border: 1px solid var(--color-border);
+  position: relative;
+}
+.idi-barra > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+.idi-statusline {
+  flex-basis: 100%;
+  color: var(--color-text-muted);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idi-tablones {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}

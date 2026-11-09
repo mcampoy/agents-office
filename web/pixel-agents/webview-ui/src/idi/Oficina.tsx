@@ -5,11 +5,12 @@ import { OfficeState } from '../office/engine/officeState.js';
 import type { Conexion, Recursos } from './datos.ts';
 import { useFoto } from './datos.ts';
 import { COLOR_ESTADO, duracion, grupo, modeloCorto, nombre, textoEstado } from './estados.ts';
+import { irAProyecto, proyectoActual, type ProyectoListado } from './api.ts';
 import { perfil } from './perfil.ts';
-import { Pestanas } from './Pestanas.tsx';
+import { type Pestana, Pestanas } from './Pestanas.tsx';
 import { Piso } from './Piso.tsx';
 import { ControlPiso, visibleEnPiso } from './piso.ts';
-import type { Foto, Instancia } from './tipos.ts';
+import type { Foto, Instancia, Statusline } from './tipos.ts';
 
 function subagentesActivos(foto: Foto, sesion: string): number {
   return foto.instancias.filter((x) => !x.principal && x.sesion === sesion && !['terminado', 'ocioso'].includes(x.estado)).length;
@@ -64,11 +65,16 @@ function useVista(): [Vista, (v: Vista) => void] {
   return [vista, ir];
 }
 
-function CabeceraMovil({ foto, conexion }: { foto: Foto | null; conexion: Conexion }) {
+function CabeceraMovil({ foto, conexion, proyectos }: { foto: Foto | null; conexion: Conexion; proyectos: ProyectoListado[] }) {
   const p = foto?.principal ?? null;
   const cuenta = contar(foto);
   return (
     <header className="idi-cabecera-movil">
+      {proyectos.length > 1 && (
+        <div className="idi-fila">
+          <SelectorProyecto proyectos={proyectos} />
+        </div>
+      )}
       <div className="idi-fila">
         <span className="idi-nombre-grande">{perfil().principal}</span>
         {p ? (
@@ -85,6 +91,11 @@ function CabeceraMovil({ foto, conexion }: { foto: Foto | null; conexion: Conexi
           ●
         </span>
       </div>
+      {foto?.statusline && (
+        <div className="idi-fila">
+          <Sesion s={foto.statusline} compacta />
+        </div>
+      )}
       <div className="idi-fila idi-cuentas">
         <span style={{ color: COLOR_ESTADO.trabajando }}>{cuenta.trabajan} trabajan</span>
         <span style={{ color: COLOR_ESTADO.esperando }}>{cuenta.esperan} esperan</span>
@@ -99,13 +110,68 @@ function CabeceraMovil({ foto, conexion }: { foto: Foto | null; conexion: Conexi
   );
 }
 
-function Cabecera({ foto, conexion }: { foto: Foto | null; conexion: Conexion }) {
+function colorPorUso(p: number | null | undefined): string {
+  if (p === null || p === undefined) return COLOR_ESTADO.ocioso;
+  if (p >= 90) return COLOR_ESTADO.error;
+  if (p >= 70) return COLOR_ESTADO.esperando;
+  return COLOR_ESTADO.terminado;
+}
+
+/** Modelo, esfuerzo, contexto y límites de la sesión, según la statusline. */
+function Sesion({ s, compacta = false }: { s: Statusline | null; compacta?: boolean }) {
+  if (!s) return null;
+  const ctx = s.contexto?.usado;
+  const vieja = (s.segundos ?? 0) > 15 * 60;
+  const titulo = `Statusline de la sesión, hace ${duracion(s.segundos)}${vieja ? ' (puede estar desactualizada)' : ''}`;
+  return (
+    <span className="idi-sesion" title={titulo} style={{ opacity: vieja ? 0.6 : 1 }}>
+      {s.modelo && <span>{s.modelo}</span>}
+      {s.esfuerzo && <span className="idi-tenue">{s.esfuerzo}</span>}
+      {ctx !== null && ctx !== undefined && (
+        <span className="idi-ctx" aria-label={`contexto usado ${Math.round(ctx)}%`}>
+          ctx{' '}
+          <span className="idi-barra" aria-hidden="true">
+            <span style={{ width: `${Math.min(100, ctx)}%`, background: colorPorUso(ctx) }} />
+          </span>{' '}
+          <span style={{ color: colorPorUso(ctx) }}>{Math.round(ctx)}%</span>
+        </span>
+      )}
+      {!compacta && s.limites?.cinco_horas?.usado != null && (
+        <span>
+          5h <span style={{ color: colorPorUso(s.limites.cinco_horas.usado) }}>{Math.round(s.limites.cinco_horas.usado)}%</span>
+        </span>
+      )}
+      {!compacta && s.limites?.siete_dias?.usado != null && (
+        <span>
+          7d <span style={{ color: colorPorUso(s.limites.siete_dias.usado) }}>{Math.round(s.limites.siete_dias.usado)}%</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Selector de proyecto: solo si la oficina sigue más de uno. Cambiar recarga la página con ?p=<id>. */
+function SelectorProyecto({ proyectos }: { proyectos: ProyectoListado[] }) {
+  if (proyectos.length < 2) return <div className="idi-marca">{perfil().nombre}</div>;
+  return (
+    <select className="idi-selector" value={proyectoActual() ?? ''} onChange={(e) => irAProyecto(e.target.value)} aria-label="Proyecto">
+      {proyectos.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.nombre}
+          {p.activos ? ` · ${p.activos} activos` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function Cabecera({ foto, conexion, proyectos }: { foto: Foto | null; conexion: Conexion; proyectos: ProyectoListado[] }) {
   const p = foto?.principal ?? null;
   const cuenta = contar(foto);
   return (
     <header className="idi-cabecera">
       <div className="flex items-center gap-12 min-w-0">
-        <div className="idi-marca">{perfil().nombre}</div>
+        <SelectorProyecto proyectos={proyectos} />
         {p ? (
           <div className="flex items-center gap-10 min-w-0">
             <span className="idi-nombre-grande">{perfil().principal}</span>
@@ -117,6 +183,7 @@ function Cabecera({ foto, conexion }: { foto: Foto | null; conexion: Conexion })
               {tareaActual(p)}
             </span>
             {p.aviso_reinicio && <span className="idi-aviso">{p.aviso_reinicio}</span>}
+            <Sesion s={foto?.statusline ?? null} />
           </div>
         ) : (
           <span className="idi-tenue">{foto ? `Sin sesión de ${perfil().principal} abierta` : 'Cargando…'}</span>
@@ -134,6 +201,11 @@ function Cabecera({ foto, conexion }: { foto: Foto | null; conexion: Conexion })
         )}
         <span className={conexion === 'en vivo' ? 'idi-tenue' : 'idi-aviso'}>● {conexion}</span>
       </div>
+      {foto?.statusline?.linea && (
+        <div className="idi-statusline" title="Tu statusline, tal como se ve en la terminal">
+          {foto.statusline.linea}
+        </div>
+      )}
     </header>
   );
 }
@@ -192,6 +264,11 @@ export function Oficina({ recursos }: { recursos: Recursos }) {
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const movil = useEsMovil();
   const [vista, irA] = useVista();
+  const [pedida, setPedida] = useState<{ pestana: Pestana; n: number } | null>(null);
+  const abrirTablon = (cual: Pestana) => {
+    setPedida((p) => ({ pestana: cual, n: (p?.n ?? 0) + 1 }));
+    if (movil) irA('paneles');
+  };
   const os = useMemo(() => new OfficeState(recursos.layout), [recursos]);
   const control = useMemo(() => new ControlPiso(os, recursos.personajes, recursos.sprites), [os, recursos]);
   const primera = useRef(true);
@@ -205,18 +282,18 @@ export function Oficina({ recursos }: { recursos: Recursos }) {
   if (movil) {
     return (
       <div className="idi-pantalla-movil">
-        <CabeceraMovil foto={foto} conexion={conexion} />
+        <CabeceraMovil foto={foto} conexion={conexion} proyectos={recursos.proyectos} />
         <main className="idi-vista">
           {vista === 'piso' && (
             <>
               {/* Arriba el plano con la altura justa; abajo los agentes. Tocar uno lo enfoca en el plano */}
               <section className="idi-piso idi-piso-movil">
-                <Piso os={os} control={control} foto={foto} muebles={recursos.muebles} seleccion={seleccion} onSeleccion={setSeleccion} movil />
+                <Piso os={os} control={control} foto={foto} muebles={recursos.muebles} seleccion={seleccion} onSeleccion={setSeleccion} movil onAbrirTablon={abrirTablon} />
               </section>
               <Tarjetas foto={foto} seleccion={seleccion} onSeleccion={setSeleccion} modo="lista" />
             </>
           )}
-          {vista === 'paneles' && <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} />}
+          {vista === 'paneles' && <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} pedida={pedida} />}
         </main>
         <nav className="idi-nav" aria-label="Vistas" style={{ gridTemplateColumns: `repeat(${VISTAS.length}, 1fr)` }}>
           {VISTAS.map((v) => (
@@ -231,12 +308,12 @@ export function Oficina({ recursos }: { recursos: Recursos }) {
 
   return (
     <div className="idi-pantalla">
-      <Cabecera foto={foto} conexion={conexion} />
+      <Cabecera foto={foto} conexion={conexion} proyectos={recursos.proyectos} />
       <main className="idi-centro">
         <section className="idi-piso">
-          <Piso os={os} control={control} foto={foto} muebles={recursos.muebles} seleccion={seleccion} onSeleccion={setSeleccion} />
+          <Piso os={os} control={control} foto={foto} muebles={recursos.muebles} seleccion={seleccion} onSeleccion={setSeleccion} onAbrirTablon={abrirTablon} />
         </section>
-        <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} />
+        <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} pedida={pedida} />
       </main>
       <Tarjetas foto={foto} seleccion={seleccion} onSeleccion={setSeleccion} />
     </div>

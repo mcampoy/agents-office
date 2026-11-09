@@ -163,6 +163,7 @@ class Oficina:
         status = self.area.status()
         corridas = [s for s in status if s["tipo"] == "corrida"]
         corrida_sesiones = [s for s in foto["sesiones"] if s["origen"] == "corrida-semanal"]
+        tablero = self.tablones(pendientes, foto["tareas_sesion"])
         return {
             "generado": ahora.isoformat(timespec="seconds"),
             "principal": principal and {**principal, "aviso_reinicio": next((a["texto"] for a in avisos if a["sesion"] == principal["sesion"]), None)},
@@ -172,7 +173,7 @@ class Oficina:
             "avisos": avisos,
             "vacantes": [a["nombre"] for a in self.catalogo.foto()["agentes"] if a["vacante"]],
             "responsable": {
-                "pendientes": len(pendientes.get("entradas", [])),
+                "pendientes": len(tablero["pendientes"]["en_curso"]) + len(tablero["pendientes"]["siguen"]),
                 "aprobaciones": len(foto["aprobaciones"]),
                 "ultimo_prompt": (actual or {}).get("ultimo_prompt_usuario"),
                 "esperas": [{"ruta": d["ruta"], "espera": d["espera_responsable"]} for d in flujos["documentos"] if d["espera_responsable"]],
@@ -183,7 +184,8 @@ class Oficina:
                 "en_curso": any(not s["fin"] for s in corrida_sesiones),
             },
             "salud": self.salud(ahora),
-            "tablones": self.tablones(pendientes, foto["tareas_sesion"]),
+            "tablones": tablero,
+            "statusline": self.statusline(ahora, actual),
             "candidatos": self.candidatos.calcular(
                 ahora.date(),
                 lambda tipo: tipo in self.zonas.get("generales", []) or (bool(agentes) and tipo not in agentes),
@@ -210,6 +212,36 @@ class Oficina:
         if destino.exists():
             os.replace(destino, destino.with_suffix(".json.bak"))
         os.replace(temporal, destino)
+
+    def statusline(self, ahora, sesion_actual):
+        """Lo último que la statusline (plugin/statusline/envoltorio.mjs) vio de este proyecto: modelo,
+        esfuerzo, contexto y límites. Prefiere la sesión actual; ignora fotos de más de 12 horas."""
+        carpeta = self.datos / "statusline"
+        if not carpeta.is_dir():
+            return None
+        limite = time.time() - 12 * 3600
+        candidatas = []
+        for ruta in carpeta.glob("*.json"):
+            try:
+                if ruta.stat().st_mtime < limite:
+                    if ruta.stat().st_mtime < time.time() - 7 * 86400:
+                        ruta.unlink(missing_ok=True)
+                    continue
+                f = json.loads(ruta.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if self.proyecto and f.get("proyecto") != self.proyecto:
+                continue
+            candidatas.append(f)
+        if not candidatas:
+            return None
+        actual = (sesion_actual or {}).get("id")
+        elegida = next((f for f in candidatas if actual and f.get("sesion") == actual), None)             or max(candidatas, key=lambda f: f.get("ts") or "")
+        try:
+            edad = (ahora - dt.datetime.fromisoformat(elegida["ts"].replace("Z", "+00:00"))).total_seconds()
+        except (KeyError, ValueError, TypeError):
+            edad = None
+        return {**elegida, "segundos": int(edad) if edad is not None else None}
 
     def tablones(self, pendientes, tareas_sesion):
         ruta_p = self.archivos.get("pendientes")

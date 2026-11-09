@@ -68,6 +68,8 @@ interface Props {
   onSeleccion: (clave: string | null) => void;
   /** Pantalla de teléfono: sin editor, etiquetas compactas y la cámara sigue al seleccionado. */
   movil?: boolean;
+  /** Tocar un tablón del piso abre su pestaña. */
+  onAbrirTablon?: (cual: 'Pendientes' | 'Auditorías') => void;
 }
 
 /** Tamaño de baldosa (px de CSS) que tiene el zoom cuando la cámara sigue a alguien en el teléfono. */
@@ -75,7 +77,7 @@ const BALDOSA_SEGUIR_CSS = 26;
 /** Debajo de esta baldosa (px de CSS) las etiquetas pasan a un punto de color. */
 const BALDOSA_COMPACTA_CSS = 13;
 
-export function Piso({ os, control, foto, muebles, seleccion, onSeleccion, movil = false }: Props) {
+export function Piso({ os, control, foto, muebles, seleccion, onSeleccion, movil = false, onAbrirTablon }: Props) {
   const contenedor = useRef<HTMLDivElement>(null);
   // Editor de upstream: herramientas, deshacer y guardar. El guardado va a config/layout.json (transporte.ts)
   const editor = useEditorActions(() => os, estadoEditor);
@@ -339,6 +341,52 @@ export function Piso({ os, control, foto, muebles, seleccion, onSeleccion, movil
       );
     }
     }
+    // Tablones fijos del proyecto, en la pared del despacho del responsable: pendientes y auditorías
+    const desp = control.rectangulo('responsable');
+    if (desp && foto.tablones) {
+      const t = foto.tablones;
+      // Una columna con las dos pizarras: separación fija en píxeles, para que no se pisen con baldosas chicas
+      const pizarras: React.ReactNode[] = [];
+      const tablon = (clave: string, cual: 'Pendientes' | 'Auditorías', _fila: number, contenido: React.ReactNode, titulo: string) =>
+        pizarras.push(
+          <button key={clave} className="idi-tablon pointer-events-auto" onClick={() => onAbrirTablon?.(cual)} title={titulo}>
+            {contenido}
+          </button>,
+        );
+      tablon(
+        'tablon-pendientes',
+        'Pendientes',
+        1.6,
+        <>
+          <span className="idi-tablon-titulo">Pendientes</span>
+          <span className="idi-tablon-cuentas">
+            <span style={{ color: COLOR_ESTADO.trabajando }}>{t.pendientes.en_curso.length} en curso</span>
+            {!compacto && <span style={{ color: COLOR_ESTADO.esperando }}>{t.pendientes.siguen.length} siguen</span>}
+            {!compacto && <span style={{ color: COLOR_ESTADO.terminado }}>{t.pendientes.hechas.length} hechas</span>}
+          </span>
+        </>,
+        `Tablón de pendientes: ${t.pendientes.en_curso.length} en curso, ${t.pendientes.siguen.length} siguen, ${t.pendientes.hechas.length} hechas`,
+      );
+      tablon(
+        'tablon-auditorias',
+        'Auditorías',
+        compacto ? 3.2 : 4.4,
+        <>
+          <span className="idi-tablon-titulo">Auditorías</span>
+          <span className="idi-tablon-cuentas">
+            <span style={{ color: t.auditorias.abiertas.length ? COLOR_ESTADO.error : COLOR_ESTADO.ocioso }}>
+              {t.auditorias.abiertas.length} abiertas
+            </span>
+          </span>
+        </>,
+        `Tablón de auditorías: ${t.auditorias.abiertas.length} fricciones abiertas, ${t.auditorias.resueltas.length} resueltas`,
+      );
+      objetos.push(
+        <div key="tablones" className="absolute idi-tablones" style={{ ...enTiles(desp.c0 + 0.15, desp.r0 + 1.6), zIndex: 33 }}>
+          {pizarras}
+        </div>,
+      );
+    }
     // Agentes borrados de .claude/agents: su lugar queda vacante (el historial se conserva en el servidor)
     const rec = control.rectangulo('recepcion');
     if (rec && foto.vacantes.length) {
@@ -410,7 +458,7 @@ export function Piso({ os, control, foto, muebles, seleccion, onSeleccion, movil
       {!editando && (
         <div className="absolute inset-0 pointer-events-none">
           {!compacto && salas}
-          {compacto ? objetos.filter((o) => /^(bandeja|buzon|archivo|luces)/.test(String((o as { key?: string }).key))) : objetos}
+          {compacto ? objetos.filter((o) => /^(buzon|archivo|luces|tablon)/.test(String((o as { key?: string }).key))) : objetos}
           {control.fichasVisibles().map(({ id, inst }) => etiqueta(id, inst))}
           {etiqueta(ID_AVATAR, null)}
         </div>

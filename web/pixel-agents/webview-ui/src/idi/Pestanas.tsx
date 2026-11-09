@@ -2,12 +2,13 @@
 // agentes ni cambia documentos. Si hay un agente seleccionado (tarjeta o personaje), las pestañas se filtran.
 import { useEffect, useMemo, useState } from 'react';
 
+import { api } from './api.ts';
 import { COLOR_ESTADO, duracion } from './estados.ts';
 import { perfil } from './perfil.ts';
-import type { Actividad, Documento, Equipo, Foto, Instancia } from './tipos.ts';
+import type { Actividad, Bloques, Documento, Equipo, Foto, Instancia, TablonAuditoria, TablonItem } from './tipos.ts';
 
-const PESTANAS = ['Aprobaciones', 'Flujos', 'Actividad', 'Tareas', 'Memoria', 'Corridas', 'Catálogo'] as const;
-type Pestana = (typeof PESTANAS)[number];
+const PESTANAS = ['Aprobaciones', 'Pendientes', 'Auditorías', 'Flujos', 'Actividad', 'Memoria', 'Corridas', 'Catálogo'] as const;
+export type Pestana = (typeof PESTANAS)[number];
 
 // --- Utilidades -----------------------------------------------------------------------------------
 
@@ -37,7 +38,7 @@ function useEquipo(): Equipo | null {
   useEffect(() => {
     let vivo = true;
     const cargar = () =>
-      fetch('./api/equipo', { cache: 'no-store' })
+      fetch(api('equipo'), { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((e) => vivo && e && setEquipo(e as Equipo))
         .catch(() => undefined);
@@ -59,7 +60,7 @@ function Visor({ ruta, onCerrar }: { ruta: string; onCerrar: () => void }) {
   useEffect(() => {
     setTexto(null);
     setError(null);
-    fetch(`./api/archivo?ruta=${encodeURIComponent(ruta)}`, { cache: 'no-store' })
+    fetch(api(`archivo?ruta=${encodeURIComponent(ruta)}`), { cache: 'no-store' })
       .then(async (r) => {
         const cuerpo = (await r.json()) as { texto?: string; error?: string };
         if (!r.ok) throw new Error(cuerpo.error ?? `HTTP ${r.status}`);
@@ -243,46 +244,117 @@ function ActividadPanel({ foto, filtro, instancias }: { foto: Foto; filtro: stri
   );
 }
 
-function Tareas({ foto, equipo, filtro, onAbrir }: { foto: Foto; equipo: Equipo | null; filtro: string | null; onAbrir: (r: string) => void }) {
-  const sesion = foto.tareas_sesion.filter((t) => !filtro || t.instancia === filtro);
-  const pendientes = equipo?.pendientes;
+function Columna({ titulo, color, items, vacio, detalle, onAbrir }: {
+  titulo: string;
+  color: string;
+  items: TablonItem[];
+  vacio: string;
+  detalle: (titulo: string) => Bloques['entradas'][number] | undefined;
+  onAbrir: (r: string) => void;
+}) {
+  return (
+    <section className="idi-columna" style={{ borderTopColor: color }}>
+      <h3 className="idi-subtitulo" style={{ color }}>
+        {titulo} <span className="idi-tenue">{items.length}</span>
+      </h3>
+      {items.length === 0 && <Vacio>{vacio}</Vacio>}
+      {items.map((it, k) => {
+        const d = it.fuente === 'archivo' ? detalle(it.titulo) : undefined;
+        const cabeza = (
+          <span className="idi-item-titulo">
+            <span>{it.titulo}</span>
+            <span className="idi-tenue">{it.fuente === 'sesion' ? `sesión ${hora(it.ts)}` : it.fecha ? fecha(it.fecha) : ''}</span>
+          </span>
+        );
+        return d && (Object.keys(d.campos).length > 0 || d.rutas.length > 0) ? (
+          <details key={k} className="idi-item">
+            <summary>{cabeza}</summary>
+            {Object.entries(d.campos).map(([c, v]) => (
+              <p key={c}>
+                <strong>{c}:</strong> {v}
+              </p>
+            ))}
+            {d.rutas.length > 0 && (
+              <p className="idi-fila-chips">
+                {d.rutas.map((r) => (
+                  <Enlace key={r} ruta={r} onAbrir={onAbrir} />
+                ))}
+              </p>
+            )}
+          </details>
+        ) : (
+          <div key={k} className="idi-item">
+            {cabeza}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function Pendientes({ foto, equipo, filtro, onAbrir }: { foto: Foto; equipo: Equipo | null; filtro: string | null; onAbrir: (r: string) => void }) {
+  const t = foto.tablones.pendientes;
+  const deLaSeleccion = (items: TablonItem[]) => items.filter((i) => !filtro || i.fuente !== 'sesion' || i.instancia === filtro);
+  const detalle = (titulo: string) => equipo?.pendientes.entradas.find((e) => e.titulo === titulo);
   return (
     <>
-      <h3 className="idi-subtitulo">Tareas de la sesión</h3>
-      {sesion.length === 0 && <Vacio>Ningún agente creó tareas hoy.</Vacio>}
-      {sesion.map((t, k) => (
-        <div key={k} className="idi-tarea">
-          <span style={{ color: t.completada ? COLOR_ESTADO.terminado : COLOR_ESTADO.trabajando }}>{t.completada ? '■' : '□'}</span>{' '}
-          {t.titulo ?? '(sin título)'} <span className="idi-tenue">{hora(t.completada ?? t.creada)}</span>
-        </div>
+      <p className="idi-nota">
+        Tu bandeja: lo que está en curso, lo que sigue y lo hecho. Sale de las tareas de la sesión
+        {t.ruta ? (
+          <>
+            {' '}y de <Enlace ruta={t.ruta} onAbrir={onAbrir} />
+          </>
+        ) : null}
+        .
+      </p>
+      <div className="idi-columnas">
+        <Columna titulo="En curso" color={COLOR_ESTADO.trabajando} items={deLaSeleccion(t.en_curso)} vacio="Nada en curso." detalle={detalle} onAbrir={onAbrir} />
+        <Columna titulo="Siguen" color={COLOR_ESTADO.esperando} items={deLaSeleccion(t.siguen)} vacio="No hay nada anotado para después." detalle={detalle} onAbrir={onAbrir} />
+        <Columna titulo="Hechas" color={COLOR_ESTADO.terminado} items={deLaSeleccion(t.hechas)} vacio="Todavía nada terminado." detalle={detalle} onAbrir={onAbrir} />
+      </div>
+    </>
+  );
+}
+
+function Auditorias({ foto, onAbrir }: { foto: Foto; onAbrir: (r: string) => void }) {
+  const a = foto.tablones.auditorias;
+  const entrada = (f: TablonAuditoria, k: number) => (
+    <details key={k} className="idi-item" style={{ borderLeftColor: f.resuelta ? COLOR_ESTADO.terminado : COLOR_ESTADO.error }}>
+      <summary className="idi-item-titulo">
+        <span>{f.titulo}</span>
+        <span className="idi-tenue">{f.fecha ? fecha(f.fecha) : ''}</span>
+      </summary>
+      {Object.entries(f.detalle).map(([c, v]) => (
+        <p key={c}>
+          <strong>{c}:</strong> {v}
+        </p>
       ))}
-      <h3 className="idi-subtitulo">
-        Pendientes del equipo {pendientes?.ruta && <Enlace ruta={pendientes.ruta} onAbrir={onAbrir}>abrir</Enlace>}
+    </details>
+  );
+  return (
+    <>
+      <p className="idi-nota">
+        Fricciones detectadas en el trabajo: lo que trabó, falló o se repite
+        {a.ruta ? (
+          <>
+            {' '}(<Enlace ruta={a.ruta} onAbrir={onAbrir} />)
+          </>
+        ) : null}
+        .
+      </p>
+      <h3 className="idi-subtitulo" style={{ color: COLOR_ESTADO.error }}>
+        Abiertas <span className="idi-tenue">{a.abiertas.length}</span>
       </h3>
-      {!equipo && <Vacio>Cargando…</Vacio>}
-      {equipo && !pendientes?.ruta && <Vacio>El perfil no define un archivo de pendientes.</Vacio>}
-      {pendientes?.sin_leer && <Vacio>Todavía no se leyó {pendientes.ruta}.</Vacio>}
-      {pendientes?.crudo && <pre className="idi-texto">{pendientes.crudo}</pre>}
-      {pendientes?.entradas.map((e, k) => (
-        <details key={k} className="idi-item">
-          <summary className="idi-item-titulo">
-            <span>{e.titulo}</span>
-            <span className="idi-tenue">{e.fecha ? fecha(e.fecha) : ''}</span>
+      {a.abiertas.length === 0 && <Vacio>No hay fricciones abiertas.</Vacio>}
+      {a.abiertas.map((f, k) => entrada({ ...f, resuelta: false }, k))}
+      {a.resueltas.length > 0 && (
+        <details className="idi-resueltas">
+          <summary className="idi-subtitulo" style={{ color: COLOR_ESTADO.terminado }}>
+            Resueltas <span className="idi-tenue">{a.resueltas.length}</span>
           </summary>
-          {Object.entries(e.campos).map(([c, v]) => (
-            <p key={c}>
-              <strong>{c}:</strong> {v}
-            </p>
-          ))}
-          {e.rutas.length > 0 && (
-            <p className="idi-fila-chips">
-              {e.rutas.map((r) => (
-                <Enlace key={r} ruta={r} onAbrir={onAbrir} />
-              ))}
-            </p>
-          )}
+          {a.resueltas.map((f, k) => entrada({ ...f, resuelta: true }, k))}
         </details>
-      ))}
+      )}
     </>
   );
 }
@@ -293,7 +365,7 @@ function Memoria({ equipo, filtroTipo, onAbrir }: { equipo: Equipo | null; filtr
   const buscar = (e: React.FormEvent) => {
     e.preventDefault();
     if (consulta.trim().length < 2) return;
-    fetch(`./api/buscar?q=${encodeURIComponent(consulta.trim())}`, { cache: 'no-store' })
+    fetch(api(`buscar?q=${encodeURIComponent(consulta.trim())}`), { cache: 'no-store' })
       .then((r) => r.json())
       .then((d: { resultados: Array<{ ruta: string; linea: number; texto: string }> }) => setResultados(d.resultados))
       .catch(() => setResultados([]));
@@ -442,7 +514,13 @@ function Catalogo({ foto, equipo, filtroTipo, onAbrir }: { foto: Foto; equipo: E
 
 // --- Contenedor -------------------------------------------------------------------------------------------
 
-export function Pestanas({ seleccion, foto, onLimpiar }: { seleccion: string | null; foto: Foto | null; onLimpiar: () => void }) {
+export function Pestanas({ seleccion, foto, onLimpiar, pedida }: {
+  seleccion: string | null;
+  foto: Foto | null;
+  onLimpiar: () => void;
+  /** Pestaña que pidió abrir otra parte de la pantalla (por ejemplo, tocar un tablón del piso). */
+  pedida?: { pestana: Pestana; n: number } | null;
+}) {
   const [activa, setActiva] = useState<Pestana>(() => {
     try {
       const guardada = window.localStorage.getItem('oficina.pestana') as Pestana | null;
@@ -453,6 +531,12 @@ export function Pestanas({ seleccion, foto, onLimpiar }: { seleccion: string | n
   });
   const [abierto, setAbierto] = useState<string | null>(null);
   const equipo = useEquipo();
+  useEffect(() => {
+    if (pedida) {
+      setActiva(pedida.pestana);
+      setAbierto(null);
+    }
+  }, [pedida]);
   const elegir = (p: Pestana) => {
     setActiva(p);
     setAbierto(null);
@@ -466,6 +550,8 @@ export function Pestanas({ seleccion, foto, onLimpiar }: { seleccion: string | n
   const quien = (clave: string) => foto?.instancias.find((i) => i.clave === clave)?.etiqueta_historial ?? clave;
   const contadores: Partial<Record<Pestana, number>> = {
     Aprobaciones: foto?.aprobaciones.length ?? 0,
+    Pendientes: foto?.tablones.pendientes.en_curso.length ?? 0,
+    Auditorías: foto?.tablones.auditorias.abiertas.length ?? 0,
     Flujos: foto?.documentos.filter((d) => d.espera_responsable).length ?? 0,
     Catálogo: foto?.candidatos.length ?? 0,
   };
@@ -498,8 +584,10 @@ export function Pestanas({ seleccion, foto, onLimpiar }: { seleccion: string | n
           <Flujos foto={foto} filtro={seleccion} onAbrir={setAbierto} />
         ) : activa === 'Actividad' ? (
           <ActividadPanel foto={foto} filtro={seleccion} instancias={foto.instancias} />
-        ) : activa === 'Tareas' ? (
-          <Tareas foto={foto} equipo={equipo} filtro={seleccion} onAbrir={setAbierto} />
+        ) : activa === 'Pendientes' ? (
+          <Pendientes foto={foto} equipo={equipo} filtro={seleccion} onAbrir={setAbierto} />
+        ) : activa === 'Auditorías' ? (
+          <Auditorias foto={foto} onAbrir={setAbierto} />
         ) : activa === 'Memoria' ? (
           <Memoria equipo={equipo} filtroTipo={inst?.tipo ?? null} onAbrir={setAbierto} />
         ) : activa === 'Corridas' ? (

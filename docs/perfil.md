@@ -12,9 +12,13 @@ El código de la oficina no sabe nada de un equipo concreto. Todo lo específico
 
 `perfiles/ejemplo/` es un perfil completo de un equipo de investigación ficticio: sirve de plantilla y es el que usan las pruebas.
 
-## Cómo se elige el perfil
+## Proyectos registrados
 
-En este orden:
+Lo normal es registrar cada proyecto con `/oficina:configurar` (`scripts/configurar.py`). El registro queda en `~/.agents-office/proyectos.json` (`id`, carpeta y perfil de cada uno), y el servidor arma una oficina por proyecto, con un selector en la cabecera. Los perfiles generados quedan en `~/.agents-office/perfiles/<id>/` y se pueden editar como cualquier otro.
+
+## Perfil suelto (sin proyectos registrados)
+
+Si no hay proyectos registrados, el servidor muestra un solo perfil. Se elige en este orden:
 
 1. `--perfil CARPETA` (servidor e instalador).
 2. La variable `AGENTS_OFFICE_PERFIL`.
@@ -31,12 +35,12 @@ Después de cambiar de perfil, hay que volver a correr `py -3 scripts/instalar.p
   "raiz_area": "C:\\ruta\\al\\area",       // carpeta que la oficina lee (solo lectura). Sin valor: <perfil>/area
   "equipo_dir": "equipo",                  // carpeta del proyecto de Claude Code del equipo (relativa a la raíz o absoluta).
                                            // Solo se capturan las sesiones abiertas dentro de ella
-  "datos": "~/.agents-office",             // dónde quedan los eventos capturados
   "puerto": 8765,
-  "raices": ["equipo", "radar"],           // lista blanca: carpetas de primer nivel que la web puede leer (.md)
+  "raices": ["equipo", "radar"],           // lista blanca: carpetas de primer nivel que la web puede leer (.md).
+                                           // "." = todo el proyecto (salvo build, node_modules, .git y ocultas)
   "archivos": {                            // archivos del equipo que se muestran (cualquiera puede faltar)
-    "pendientes": "equipo/pendientes.md",
-    "fricciones": "equipo/fricciones.md",
+    "pendientes": "equipo/pendientes.md",  // tablón de pendientes (ver abajo)
+    "fricciones": "equipo/fricciones.md",  // tablón de auditorías
     "decisiones": "equipo/decisiones.md",
     "remember": "equipo/.remember",
     "status": "equipo/status"
@@ -100,3 +104,20 @@ Los flujos asumen dos convenciones de documento:
 - Los informes de verificación con secciones `## Ronda N` (o `## Ciclo C, ronda N`).
 
 Si tu equipo no las usa, dejá `flujos.json` sin reglas y la pestaña Flujos queda vacía.
+
+## Tablones
+
+**`pendientes.md`.** El formato estándar (el que crea `/oficina:configurar`) tiene tres secciones con una línea por tarea:
+
+```markdown
+## En curso
+- [ ] tarea que se está haciendo
+## Siguen
+- [ ] tarea para después
+## Hechas
+- [x] tarea terminada
+```
+
+Un archivo sin esas secciones (por ejemplo, con entradas `## fecha · título`) también sirve: cada entrada va a "siguen". Las tareas que los agentes crean y completan en la sesión se suman solas a "en curso" y "hechas".
+
+**`fricciones.md`.** Una entrada `## AAAA-MM-DD · título` por fricción, con campos en negrita (`**Estado:** abierta`, `**Qué pasó:**`, `**Propuesta:**`). Un estado que dice "resuelta" o "cerrada" la pasa a resueltas. Los comentarios HTML (`<!-- -->`) se ignoran: ahí va la guía de formato.

@@ -226,7 +226,8 @@ class Area:
         if texto is None:
             return {"ruta": relativa, "entradas": [], "sin_leer": True}
         entradas, actual = [], None
-        for linea in texto.splitlines():
+        # Los comentarios HTML (por ejemplo, la guía de formato de las plantillas) no son entradas
+        for linea in re.sub(r"<!--.*?-->", "", texto, flags=re.S).splitlines():
             m = re.match(r"^##\s+(.+)$", linea)
             if m:
                 titulo = m.group(1).strip()

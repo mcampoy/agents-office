@@ -9,6 +9,7 @@ import { migrateLayoutColors } from '../office/layout/layoutSerializer.js';
 import { setCharacterTemplates } from '../office/sprites/spriteData.js';
 import type { OfficeLayout } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
+import { api, cargarProyectos, type ProyectoListado } from './api.ts';
 import { fijarPerfil, type PerfilWeb } from './perfil.ts';
 import type { ConfigSprites, Foto, Personajes } from './tipos.ts';
 
@@ -24,11 +25,14 @@ export interface Recursos {
   muebles: LoadedAssetData;
   personajes: Personajes;
   sprites: ConfigSprites;
+  /** Proyectos registrados (para el selector de la cabecera). */
+  proyectos: ProyectoListado[];
 }
 
 /** Carga sprites, muebles, layout y config. Registra los sprites en los módulos del motor. */
 export async function cargarRecursos(): Promise<Recursos> {
   const base = './assets/decoded/';
+  const proyectos = await cargarProyectos();
   const [characters, floors, walls, catalog, furniture, personajes, layout, sprites, perfil] = await Promise.all([
     json<CharacterDirectionSprites[]>(`${base}characters.json`),
     json<string[][][]>(`${base}floors.json`),
@@ -36,9 +40,9 @@ export async function cargarRecursos(): Promise<Recursos> {
     json<CatalogEntry[]>(`${base}furniture-catalog.json`),
     json<Record<string, string[][]>>(`${base}furniture.json`),
     json<Personajes>(`${base}personajes.json`),
-    json<OfficeLayout>('./api/layout'),
-    json<ConfigSprites>('./api/sprites').catch(() => ({}) as ConfigSprites),
-    json<PerfilWeb>('./api/perfil').catch(() => null),
+    json<OfficeLayout>(api('layout')),
+    json<ConfigSprites>(api('sprites')).catch(() => ({}) as ConfigSprites),
+    json<PerfilWeb>(api('perfil')).catch(() => null),
   ]);
   fijarPerfil(perfil);
   setCharacterTemplates(characters);
@@ -46,7 +50,7 @@ export async function cargarRecursos(): Promise<Recursos> {
   setWallSprites(walls);
   const muebles = { catalog, sprites: furniture } as unknown as LoadedAssetData;
   buildDynamicCatalog(muebles);
-  return { layout: migrateLayoutColors(layout), muebles, personajes, sprites };
+  return { layout: migrateLayoutColors(layout), muebles, personajes, sprites, proyectos };
 }
 
 export type Conexion = 'conectando' | 'en vivo' | 'sin conexión';
@@ -57,10 +61,10 @@ export function useFoto(): { foto: Foto | null; conexion: Conexion } {
   const [conexion, setConexion] = useState<Conexion>('conectando');
   useEffect(() => {
     let vivo = true;
-    json<Foto>('./api/estado')
+    json<Foto>(api('estado'))
       .then((f) => vivo && f && setFoto(f))
       .catch(() => undefined);
-    const es = new EventSource('./api/stream');
+    const es = new EventSource(api('stream'));
     es.addEventListener('estado', (ev) => {
       try {
         setFoto(JSON.parse((ev as MessageEvent<string>).data) as Foto);

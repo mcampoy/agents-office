@@ -1,6 +1,6 @@
 """Prepara e instala el plugin de la oficina a nivel usuario.
 
-Uso: py -3 scripts/instalar.py [--datos CARPETA] [--solo-generar]
+Uso: py -3 scripts/instalar.py [--datos CARPETA] [--solo-generar] [--statusline | --quitar-statusline]
 
 1. Resuelve la ruta absoluta de python.exe (el intérprete que corre este script).
    Rechaza el alias de la Microsoft Store: en la forma exec de los hooks no sirve.
@@ -10,11 +10,17 @@ Uso: py -3 scripts/instalar.py [--datos CARPETA] [--solo-generar]
 4. Genera las skills /oficina:abrir y /oficina:configurar con las rutas de esta máquina.
 5. Registra el marketplace local e instala el plugin (salvo con --solo-generar).
 
+Con --statusline, envuelve la statusline de ~/.claude/settings.json: la original se sigue mostrando igual y,
+en los proyectos registrados, la oficina recibe modelo, esfuerzo, contexto y límites
+(plugin/statusline/envoltorio.mjs). Deja un respaldo en settings.json.antes-oficina.
+--quitar-statusline vuelve a la original.
+
 Los proyectos se dan de alta con scripts/configurar.py (o /oficina:configurar): sin proyectos, el hook no
 captura nada.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -63,8 +69,59 @@ def generar_hooks(python, datos):
     return destino
 
 
+CONFIG_CLAUDE = Path.home() / ".claude" / "settings.json"
+ENVOLTORIO = REPO / "plugin" / "statusline" / "envoltorio.mjs"
+
+
+def config_previa(datos):
+    try:
+        return json.loads((datos / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def escribir_config(python, datos):
-    return escribir_config_hook(datos, {"python": python, "repo": str(REPO)})
+    extra = {"python": python, "repo": str(REPO)}
+    previa = config_previa(datos)
+    if previa.get("statusline_original"):
+        extra["statusline_original"] = previa["statusline_original"]
+    return escribir_config_hook(datos, extra)
+
+
+def expandir_inicio(comando):
+    """`node ~/.claude/x.mjs` -> ruta absoluta: el envoltorio corre el comando con cmd.exe, que no expande ~."""
+    return re.sub(r"(^|\s)~(?=[/\\])", lambda m: m.group(1) + str(Path.home()).replace("\\", "/"), comando)
+
+
+def envolver_statusline(datos):
+    config = json.loads(CONFIG_CLAUDE.read_text(encoding="utf-8"))
+    actual = (config.get("statusLine") or {}).get("command") or ""
+    if "envoltorio.mjs" in actual:
+        return "la statusline ya estaba envuelta"
+    respaldo = CONFIG_CLAUDE.with_name("settings.json.antes-oficina")
+    respaldo.write_text(CONFIG_CLAUDE.read_text(encoding="utf-8"), encoding="utf-8")
+    previa = config_previa(datos)
+    previa["statusline_original"] = expandir_inicio(actual) if actual else None
+    (datos / "config.json").write_text(json.dumps(previa, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    nueva = dict(config.get("statusLine") or {"type": "command", "padding": 0})
+    nueva["command"] = f'node "{ENVOLTORIO.as_posix()}" --datos "{datos.as_posix()}"'
+    config["statusLine"] = nueva
+    CONFIG_CLAUDE.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return f"statusline envuelta (respaldo: {respaldo}; original: {previa['statusline_original']})"
+
+
+def quitar_envoltorio(datos):
+    config = json.loads(CONFIG_CLAUDE.read_text(encoding="utf-8"))
+    actual = (config.get("statusLine") or {}).get("command") or ""
+    if "envoltorio.mjs" not in actual:
+        return "la statusline no estaba envuelta"
+    original = config_previa(datos).get("statusline_original")
+    if original:
+        config["statusLine"]["command"] = original
+    else:
+        config.pop("statusLine", None)
+    CONFIG_CLAUDE.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return f"statusline restaurada: {original}"
 
 
 SKILL_ABRIR = """---
@@ -146,6 +203,10 @@ def main():
     print(f"config: {escribir_config(python, datos)}")
     for skill in generar_skills(python):
         print(f"skill: {skill}")
+    if "--statusline" in sys.argv:
+        print(envolver_statusline(datos))
+    if "--quitar-statusline" in sys.argv:
+        print(quitar_envoltorio(datos))
     proyectos = [p["id"] for p in leer_proyectos(datos)]
     print(f"proyectos: {', '.join(proyectos) if proyectos else 'ninguno (sumalos con scripts/configurar.py)'}")
     if "--solo-generar" in sys.argv:

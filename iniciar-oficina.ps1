@@ -3,7 +3,7 @@
   Levanta la oficina (si no está corriendo) y la abre en el navegador.
 
 .DESCRIPTION
-  1. Lee el perfil (como el servidor: -Perfil, AGENTS_OFFICE_PERFIL, local.json o perfiles/ejemplo).
+  1. Lee los proyectos registrados (<datos>/proyectos.json) o, con -Perfil, un perfil suelto.
   2. Si ya hay una oficina respondiendo en el puerto, solo abre el navegador.
   3. Si no, verifica que exista el python.exe que registró el instalador (decisión 1), levanta el
      servidor en segundo plano, sin ventana, espera a que responda y abre el navegador.
@@ -32,15 +32,19 @@ $pyArgs = @('-3')
 $info = & $py @pyArgs -c @"
 import json, sys
 sys.path.insert(0, r'$repo')
+from servidor.oficinas import carpeta_comun, leer_proyectos
 from servidor.perfil import Perfil
-p = Perfil(r'$Perfil' or None)
-datos = p.carpeta_datos()
+datos = carpeta_comun()
+proyectos = leer_proyectos(datos)
+perfil = r'$Perfil' or None
+p = Perfil(perfil if perfil or not proyectos else proyectos[0]['perfil'])
 config = {}
 try:
     config = json.loads((datos / 'config.json').read_text(encoding='utf-8'))
 except (OSError, ValueError):
     pass
-print(json.dumps({'puerto': p['puerto'], 'datos': str(datos), 'perfil': str(p.carpeta), 'nombre': p['nombre'],
+nombre = p['nombre'] if perfil or len(proyectos) < 2 else ', '.join(x['id'] for x in proyectos)
+print(json.dumps({'puerto': p['puerto'], 'datos': str(datos), 'perfil': str(p.carpeta), 'nombre': nombre,
                   'python': config.get('python')}))
 "@
 if ($LASTEXITCODE -ne 0) { throw "No se pudo leer el perfil. ¿Está instalado Python 3 (py -3)?" }
@@ -90,7 +94,7 @@ if (Responde) {
         $listo = Responde
     }
     if (-not $listo) { throw "El servidor no respondió en $url. Revisá $log.err" }
-    Write-Host "Oficina '$($info.nombre)' en $url (perfil: $($info.perfil))"
+    Write-Host "Oficina ($($info.nombre)) en $url"
 }
 
 if (-not $SinNavegador) { Start-Process $url }

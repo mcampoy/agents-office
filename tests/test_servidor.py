@@ -919,6 +919,19 @@ class Tablones(unittest.TestCase):
         self.assertEqual(r["siguen"][0]["titulo"], "Presentación lista")
         self.assertEqual(r["en_curso"], [])
 
+    def test_plantillas_vacias_no_tienen_entradas(self):
+        """La guía de formato va en un comentario HTML: no cuenta como fricción ni como pendiente."""
+        from servidor import tablones
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            (raiz / "fricciones.md").write_text(tablones.PLANTILLA_FRICCIONES, encoding="utf-8")
+            (raiz / "pendientes.md").write_text(tablones.PLANTILLA_PENDIENTES, encoding="utf-8")
+            area = Area(raiz, raices=["."])
+            area.barrido()
+            self.assertEqual(tablones.auditorias(area.bloques("fricciones.md")), {"abiertas": [], "resueltas": []})
+            vacio = tablones.pendientes(area.texto("pendientes.md"), area.bloques("pendientes.md"), [])
+            self.assertEqual(vacio, {"en_curso": [], "siguen": [], "hechas": []})
+
     def test_auditorias_abiertas_y_resueltas(self):
         from servidor import tablones
         bloques = {"entradas": [{"titulo": "Permiso de Drive", "fecha": "2026-11-01", "campos": {"Estado": "abierta"}},

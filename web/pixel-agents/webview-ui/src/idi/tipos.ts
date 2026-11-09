@@ -74,6 +74,21 @@ export interface Foto {
   actividad: Actividad[];
   tareas_sesion: TareaSesion[];
   candidatos: Candidato[];
+  tablones: Tablones;
+  statusline: Statusline | null;
+}
+
+/** Lo que vio la statusline de la sesión (plugin/statusline/envoltorio.mjs). */
+export interface Statusline {
+  ts: string;
+  segundos: number | null;
+  sesion: string | null;
+  modelo: string | null;
+  esfuerzo: string | null;
+  contexto: { usado: number | null; ventana: number | null; entrada: number | null };
+  limites: { cinco_horas: { usado: number | null } | null; siete_dias: { usado: number | null } | null };
+  costo: number | null;
+  linea: string;
 }
 
 export interface Personajes {
@@ -174,4 +189,25 @@ export interface Equipo {
     }>;
     skills: Array<{ nombre: string; descripcion: string | null; archivo: string }>;
   };
+}
+
+export interface TablonItem {
+  titulo: string;
+  fuente: 'sesion' | 'archivo';
+  fecha?: string | null;
+  instancia?: string;
+  ts?: string | null;
+}
+
+export interface TablonAuditoria {
+  titulo: string;
+  fecha: string | null;
+  estado: string;
+  detalle: Record<string, string>;
+  resuelta?: boolean;
+}
+
+export interface Tablones {
+  pendientes: { ruta: string | null; en_curso: TablonItem[]; siguen: TablonItem[]; hechas: TablonItem[] };
+  auditorias: { ruta: string | null; abiertas: TablonAuditoria[]; resueltas: TablonAuditoria[] };
 }
