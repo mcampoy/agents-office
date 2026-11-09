@@ -1,0 +1,30 @@
+{
+  "name": "agents-office-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Build del piso de la oficina sobre el webview de Pixel Agents (MIT). Solo se usa para compilar; en uso diario no corre Node.",
+  "scripts": {
+    "sprites": "node idi/sprites.mjs",
+    "build": "npm run sprites && vite build --config webview-ui/vite.idi.config.ts",
+    "dev": "vite --config webview-ui/vite.idi.config.ts",
+    "typecheck": "tsc -p webview-ui/tsconfig.idi.json"
+  },
+  "dependencies": {
+    "@material-symbols/font-700": "^0.46.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "26.x",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "pngjs": "^7.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.8"
+  }
+}

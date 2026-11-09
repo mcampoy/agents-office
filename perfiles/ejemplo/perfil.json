@@ -1,0 +1,81 @@
+{
+  "_comentario": "Perfil de ejemplo: un equipo de investigación ficticio. Copialo a otra carpeta y adaptalo (docs/perfil.md).",
+  "nombre": "Oficina de ejemplo",
+  "raiz_area": null,
+  "equipo_dir": "equipo",
+  "datos": "~/.agents-office",
+  "puerto": 8765,
+  "raices": [
+    "equipo",
+    "radar",
+    "researches",
+    "data-security-governance"
+  ],
+  "archivos": {
+    "pendientes": "equipo/pendientes.md",
+    "fricciones": "equipo/fricciones.md",
+    "decisiones": "equipo/decisiones.md",
+    "remember": "equipo/.remember",
+    "status": "equipo/status"
+  },
+  "principal": "partner",
+  "verificador": "verificador",
+  "responsable": "responsable",
+  "scripts": {
+    "conocidos": [
+      "detector-cambios.py",
+      "corrida-semanal.py"
+    ],
+    "buzon": "notificar.py",
+    "canales": [
+      "radar",
+      "researches"
+    ],
+    "canal_por_defecto": "avisos",
+    "controles": [
+      "comprobar-citas.py",
+      "revisar-estilo.ps1"
+    ]
+  },
+  "corrida": {
+    "agente": "radar",
+    "dia_semana": 2,
+    "hora": 10,
+    "variable_origen": {
+      "nombre": "OFICINA_CORRIDA",
+      "valor": "1"
+    }
+  },
+  "piso": {
+    "salas": {
+      "responsable": "Responsable",
+      "coordinacion": "Coordinación",
+      "exploracion": "Exploración",
+      "paso-verificacion": "Verificación",
+      "comun": "Zona común",
+      "recepcion": "Recepción",
+      "lectura": "Lectura",
+      "base": "Sala base",
+      "comunicacion": "Comunicación",
+      "flotante": "Flotantes"
+    },
+    "nombres_cortos": {
+      "investigador-proveedor": "investigador",
+      "editor-comunicacion": "editor com.",
+      "general-purpose": "general"
+    },
+    "accesorios": {
+      "lente-*": "lupa"
+    },
+    "trabajo_externo": {
+      "maquetador": {
+        "icono": "google",
+        "herramientas": "drive|docs|slides|sheets|google"
+      }
+    },
+    "junto_al_reloj": "radar",
+    "luces_apagadas": [
+      "comunicacion"
+    ]
+  }
+}

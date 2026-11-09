@@ -1,0 +1,119 @@
+{
+  "_comentario": "Reglas ruta -> tipo -> etapa. Rutas relativas a la raíz del área, con '/'. Patrones glob: '*' no cruza '/', '**' sí. Gana la primera regla que coincide.",
+  "ignorar": [
+    "**/_plantilla.md",
+    "**/CHANGELOG.md",
+    "**/README.md",
+    "equipo/**",
+    "**/background/**"
+  ],
+  "reglas": [
+    {
+      "patron": "**/research/**/*-verificacion*.md",
+      "tipo": "verificacion",
+      "etapa": "verificación"
+    },
+    {
+      "patron": "*/registry/providers/*.md",
+      "tipo": "ficha",
+      "etapa": "investigación"
+    },
+    {
+      "patron": "*/registry/*.md",
+      "tipo": "registro",
+      "etapa": "investigación"
+    },
+    {
+      "patron": "researches/*/research/*-informe-*.md",
+      "tipo": "informe",
+      "etapa": "investigación"
+    },
+    {
+      "patron": "**/research/**/*.md",
+      "tipo": "nota",
+      "etapa": "investigación"
+    },
+    {
+      "patron": "**/regulatory/*.md",
+      "tipo": "informe de lente",
+      "etapa": "lente"
+    },
+    {
+      "patron": "**/drafts/**/*.md",
+      "tipo": "borrador",
+      "etapa": "borrador base"
+    },
+    {
+      "patron": "**/communication/*/guion.md",
+      "tipo": "guion",
+      "etapa": "guion"
+    },
+    {
+      "patron": "**/communication/*/imagenes.md",
+      "tipo": "pedido de imágenes",
+      "etapa": "imágenes (Codex)"
+    },
+    {
+      "patron": "radar/*-radar.md",
+      "tipo": "radar",
+      "etapa": "radar"
+    }
+  ],
+  "_espejo": "Qué documento verifica un informe de verificación. 'informe' es una regex sobre la ruta del informe; 'documento' es un patrón glob que se completa con sus grupos. Si el informe nombra el documento verificado en su encabezado, eso tiene prioridad.",
+  "espejo": [
+    {
+      "informe": "^(?P<tema>.+)/research/providers/(?P<proveedor>[^/]+)/[^/]+$",
+      "documento": "{tema}/registry/providers/{proveedor}.md",
+      "tipo": "ficha"
+    },
+    {
+      "informe": "^(?P<tema>.+)/research/drafts/[^/]+$",
+      "documento": "{tema}/drafts/**/*.md",
+      "tipo": "borrador"
+    },
+    {
+      "informe": "^(?P<tema>.+)/research/regulatory/[^/]+$",
+      "documento": "{tema}/regulatory/*.md",
+      "tipo": "informe de lente"
+    },
+    {
+      "informe": "^(?P<tema>.+)/research/communication/(?P<pieza>[^/]+)/[^/]+$",
+      "documento": "{tema}/communication/{pieza}/guion.md",
+      "tipo": "pieza"
+    },
+    {
+      "informe": "^(?P<tema>researches/[^/]+)/research/(?P<fecha>\\d{4}-\\d{2}-\\d{2})-verificacion(?:-(?P<sufijo>[^/.]+))?\\.md$",
+      "documento": "{tema}/research/*-informe-*.md",
+      "tipo": "informe"
+    }
+  ],
+  "maquetado": {
+    "agentes": [
+      "maquetador"
+    ],
+    "herramientas_contienen": [
+      "drive",
+      "docs",
+      "slides"
+    ],
+    "tipo": "maquetado",
+    "etapa": "maquetado"
+  },
+  "esperas_del_responsable": {
+    "revision": "revisión del responsable",
+    "final": "revisión final"
+  },
+  "rondas_maximas": 2,
+  "tipo_pendiente_externo": "pedido de imágenes",
+  "tipos_con_revision_inicial": [
+    "guion"
+  ],
+  "tipos_con_revision_final": [
+    "guion",
+    "maquetado"
+  ],
+  "estados_cerrados": [
+    "revisado",
+    "aprobado para difusión"
+  ]
+}

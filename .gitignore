@@ -1,0 +1,11 @@
+# Lo genera scripts/instalar.py con la ruta de python.exe y la carpeta de datos de esta máquina.
+plugin/hooks/hooks.json
+# Perfil elegido en esta máquina (ver docs/perfil.md)
+local.json
+__pycache__/
+.remember/
+# Respaldos del editor del piso
+**/layout.json.bak
+**/layout.json.tmp
+# Build de la web (se genera con npm run build en web/pixel-agents)
+web/dist/

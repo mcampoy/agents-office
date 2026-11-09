@@ -1,0 +1,403 @@
+/* Base de upstream (tokens, paneles, botones e íconos que usa el editor del piso). Lo propio va después y
+   pisa la fuente: la de upstream (FSPixelSansUnicode) no se distribuye, ver decisión 4. */
+@import '../index.css';
+
+/* VT323 (SIL OFL 1.1, fonts/OFL-VT323.txt), reemplaza a FSPixelSansUnicode de upstream (decisión 4).
+   Se probó Pixelify Sans: en tamaños chicos sus 2, 3, 5 y 6 se confunden con el 8.
+   El renderer de upstream dibuja en el canvas con 'FS Pixel Sans' por nombre: ese nombre también apunta a
+   VT323 (la última @font-face con los mismos descriptores gana sobre la de index.css). */
+@font-face {
+  font-family: 'FS Pixel Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/VT323.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/VT323.ttf') format('truetype');
+}
+
+:root {
+  --color-bg: #1e1e2e;
+  --color-bg-dark: #181828;
+  --color-panel: #24243a;
+  --color-border: #4a4a6a;
+  --color-text: rgba(255, 255, 255, 0.92);
+  --color-text-muted: rgba(255, 255, 255, 0.55);
+  --shadow-pixel: 2px 2px 0px #0a0a14;
+  --vignette: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+@theme inline {
+  --spacing: 1px;
+  --font-pixel: 'VT323', monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-bg-dark);
+    color: var(--color-text);
+    font-family: var(--font-pixel);
+    font-size: 20px;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+}
+
+.idi-pantalla {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.idi-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  background: var(--color-bg);
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+.idi-marca {
+  color: #e0b050;
+  letter-spacing: 1px;
+}
+.idi-nombre-grande {
+  font-size: 23px;
+}
+.idi-pildora {
+  color: #14141f;
+  padding: 1px 8px;
+}
+.idi-aviso {
+  color: #ffc233;
+  border: 1px solid #ffc233;
+  padding: 0 6px;
+}
+.idi-tenue {
+  color: var(--color-text-muted);
+}
+
+.idi-centro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
+}
+.idi-piso {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+.idi-pestanas {
+  background: var(--color-bg);
+  border-left: 2px solid var(--color-border);
+  overflow: auto;
+}
+.idi-pestana {
+  padding: 6px 9px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+}
+.idi-pestana-sel {
+  color: var(--color-text);
+  border-bottom-color: #e0b050;
+}
+
+.idi-tarjetas {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  background: var(--color-bg);
+  border-top: 2px solid var(--color-border);
+}
+.idi-tarjeta {
+  flex: 0 0 200px;
+  width: 200px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  background: var(--color-panel);
+  border: 2px solid;
+  border-left-width: 6px;
+  padding: 5px 8px;
+  box-shadow: var(--shadow-pixel);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.idi-tarjeta-sel {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+.idi-rol {
+  font-size: 16px;
+  color: var(--color-text-muted);
+}
+
+/* Etiquetas sobre el piso */
+.idi-etiqueta {
+  background: rgba(20, 20, 32, 0.88);
+  border: 1px solid;
+  border-left-width: 3px;
+  padding: 1px 5px 2px;
+  font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-align: center;
+  overflow: hidden;
+}
+.idi-etiqueta > div {
+  justify-content: center;
+}
+.idi-nombre {
+}
+/* En el piso la fuente es chica: sin negrita, para que los números (#2) no se empasten */
+.idi-etiqueta .idi-nombre {
+  font-size: 14px;
+}
+.idi-modelo {
+  font-size: 13px;
+  padding: 0 3px;
+  background: #3a3a55;
+  color: #d8d8f0;
+}
+.idi-insignia {
+  font-size: 12px;
+  color: #14141f;
+  padding: 0 2px;
+  line-height: 1.2;
+}
+.idi-extra {
+  font-size: 14px;
+  color: #d8d8f0;
+}
+.idi-estado {
+  font-size: 14px;
+}
+
+.idi-objeto {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(20, 20, 32, 0.85);
+  border: 1px solid var(--color-border);
+  padding: 1px 5px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.idi-chico {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  font-size: 13px;
+}
+.idi-sala {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.idi-sala-apagada {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes idi-latido {
+  0%,
+  100% {
+    transform: translate(-50%, -100%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -112%) scale(1.08);
+  }
+}
+.idi-latido {
+  animation: idi-latido 1s steps(2) infinite;
+}
+.idi-brilla {
+  border-color: #fff3a0;
+  box-shadow: 0 0 8px #fff3a0;
+}
+.idi-archivo-on {
+  box-shadow: 0 0 12px 3px rgba(255, 243, 160, 0.8);
+  background: rgba(255, 243, 160, 0.15);
+}
+
+.idi-boton {
+  background: var(--color-panel);
+  border: 2px solid var(--color-border);
+  padding: 2px 10px;
+  box-shadow: var(--shadow-pixel);
+}
+.idi-boton:hover {
+  border-color: #e0b050;
+}
+
+/* --- Teléfono (≤760 px): cabecera compacta, una vista a la vez y navegación abajo --------------------- */
+.idi-pantalla-movil {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+}
+.idi-cabecera-movil {
+  background: var(--color-bg);
+  border-bottom: 2px solid var(--color-border);
+  padding: 6px 12px 4px;
+  font-size: 18px;
+}
+.idi-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  min-width: 0;
+}
+.idi-cuentas {
+  justify-content: space-between;
+  font-size: 17px;
+}
+.idi-conexion {
+  margin-left: auto;
+  font-size: 18px;
+}
+.idi-banda {
+  margin-top: 4px;
+  padding: 2px 6px;
+  white-space: normal;
+}
+.idi-vista {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.idi-vista > * {
+  min-width: 0;
+}
+.idi-vista > .idi-piso {
+  flex: 1;
+}
+/* El plano es apaisado (48×28 baldosas): en vertical se le da su alto más un margen para acercar */
+.idi-vista > .idi-piso-movil {
+  flex: 0 0 auto;
+  height: max(calc(100vw * 0.62), 34dvh);
+  border-bottom: 2px solid var(--color-border);
+}
+.idi-vista > .idi-pestanas {
+  border-left: none;
+  flex: 1;
+}
+.idi-lista {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+.idi-lista .idi-tarjeta {
+  width: auto;
+  flex: 0 0 auto;
+  font-size: 18px;
+  min-height: 64px;
+}
+.idi-lista .idi-tarjeta .idi-tenue {
+  white-space: nowrap;
+}
+.idi-nav {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--color-bg);
+  border-top: 2px solid var(--color-border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.idi-nav-boton {
+  min-height: 52px;
+  background: transparent;
+  border: none;
+  border-top: 3px solid transparent;
+  color: var(--color-text-muted);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.idi-nav-sel {
+  color: var(--color-text);
+  border-top-color: #e0b050;
+}
+.idi-nav-boton:focus-visible,
+.idi-tarjeta:focus-visible,
+.idi-boton:focus-visible,
+.idi-pestana:focus-visible {
+  outline: 2px solid #e0b050;
+  outline-offset: 2px;
+}
+.idi-contador {
+  background: #ffc233;
+  color: #14141f;
+  font-size: 16px;
+  padding: 0 6px;
+  min-width: 20px;
+  text-align: center;
+}
+.idi-punto {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #14141f;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.idi-flotante {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 50;
+  min-height: 44px;
+  font-size: 18px;
+}
+@media (max-width: 760px) {
+  .idi-tarjetas {
+    scroll-snap-type: x mandatory;
+    padding: 8px 12px;
+  }
+  .idi-tarjetas .idi-tarjeta {
+    flex-basis: 170px;
+    width: 170px;
+    scroll-snap-align: start;
+    min-height: 44px;
+  }
+  .idi-pestana {
+    min-height: 44px;
+    font-size: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .idi-latido {
+    animation: none;
+  }
+}

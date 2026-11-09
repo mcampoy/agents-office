@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oficina · vista básica</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 1.5rem; background: #111; color: #ddd; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; } h2 { font-size: 1rem; margin: 1.5rem 0 .5rem; color: #9cf; }
+  .nota { color: #888; } table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #333; vertical-align: top; }
+  .estado { font-weight: 600; } .trabajando { color: #6c6; } .esperando { color: #fc3; } .error { color: #f66; }
+  .terminado { color: #8ac; } .ocioso { color: #888; } .aviso { background: #532; padding: .5rem; margin: .5rem 0; }
+</style>
+</head>
+<body>
+<h1>Oficina · vista básica</h1>
+<p class="nota">Vista provisoria de texto hasta que esté el piso (fase 3). <span id="conexion">conectando…</span></p>
+<div id="avisos"></div>
+<h2>Agentes</h2><table id="agentes"></table>
+<h2>Aprobaciones en espera</h2><table id="aprobaciones"></table>
+<h2>Documentos en curso</h2><table id="documentos"></table>
+<h2>Responsable y corrida semanal</h2><p id="responsable"></p>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const dur = s => s == null ? "" : s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`;
+const filas = (cab, datos) => `<tr>${cab.map(c => `<th>${c}</th>`).join("")}</tr>` + datos.map(f => `<tr>${f.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+
+function pintar(f) {
+  $("avisos").innerHTML = (f.avisos || []).map(a => `<div class="aviso">${esc(a.texto)}</div>`).join("");
+  $("agentes").innerHTML = filas(["Agente", "Estado", "Desde", "Modelo", "Herramienta", "Recurso", "Documento", "Zona"],
+    f.instancias.map(i => [
+      `${esc(i.tipo)}${i.principal ? "" : " #" + i.numero}${i.etiqueta ? " · " + esc(i.etiqueta) : ""}`,
+      `<span class="estado ${i.estado}">${i.estado}</span>${i.espera ? " (" + esc(i.espera.tipo) + ")" : ""}`,
+      dur(i.segundos_en_estado), esc(i.modelo), esc(i.herramienta), esc(i.recurso), esc(i.documento),
+      esc(i.zona) + (i.sin_zona ? " · sin zona" : "")]));
+  $("aprobaciones").innerHTML = f.aprobaciones.length ? filas(["Instancia", "Herramienta", "Recurso", "Desde"],
+    f.aprobaciones.map(a => [esc(a.instancia), esc(a.herramienta), esc(a.recurso), esc(a.desde)])) : "<tr><td>Nada en espera.</td></tr>";
+  $("documentos").innerHTML = f.documentos.length ? filas(["Documento", "Tipo", "Etapa", "Estado", "Cruces", "Espera"],
+    f.documentos.map(d => [esc(d.ruta), esc(d.tipo), esc(d.etapa), esc(d.encabezado?.estado),
+      d.cruces.map(c => esc(c.tipo_documento + " " + c.etiqueta)).join(", "), esc(d.espera_responsable)])) : "<tr><td>Sin documentos tocados hoy.</td></tr>";
+  const r = f.responsable, c = f.reloj;
+  $("responsable").textContent = `Pendientes: ${r.pendientes} · aprobaciones en espera: ${r.aprobaciones} · ` +
+    `corrida semanal: última ${c.ultima ?? "—"}, próxima ${c.proxima}${c.en_curso ? " (en curso)" : ""}` +
+    (f.salud.errores_hook_24h ? ` · errores del hook (24 h): ${f.salud.errores_hook_24h}` : "");
+}
+
+fetch("/api/estado").then(r => r.json()).then(pintar);
+const fuente = new EventSource("/api/stream");
+fuente.addEventListener("estado", e => { $("conexion").textContent = "en vivo"; pintar(JSON.parse(e.data)); });
+fuente.onerror = () => { $("conexion").textContent = "reconectando…"; };
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "agents-office",
+  "owner": { "name": "mcampoy" },
+  "plugins": [
+    {
+      "name": "oficina",
+      "source": "./plugin",
+      "description": "Oficina de agentes: captura redactada de los eventos de las sesiones de un equipo de agentes de Claude Code."
+    }
+  ]
+}
