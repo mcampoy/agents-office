@@ -17,31 +17,87 @@ Claude Code ──hook (python)──► <datos>/eventos/AAAA-MM-DD.jsonl
 
 Este repo es la **base**, genérica. Lo propio de cada equipo va en un **perfil**: una carpeta con su `perfil.json` (rutas, roles, scripts), sus zonas, flujos, layout y sprites. Ver [docs/perfil.md](docs/perfil.md). `perfiles/ejemplo/` es un perfil de muestra y la plantilla para uno propio.
 
-## Uso
+## Instalación
 
-Requisitos: Windows, Python 3.12+ (solo librería estándar) y Node 20+ únicamente para compilar la web.
+Requisitos: Windows, Claude Code y Python 3.12+ (solo librería estándar). La web ya viene compilada en `web/dist`: Node hace falta solo si se modifica la web.
+
+1. Clonar el repo y armar el perfil del equipo, copiando `perfiles/ejemplo` a una carpeta propia (ver [docs/perfil.md](docs/perfil.md)). Como mínimo hay que cambiar `raiz_area`, `equipo_dir` y `principal` en `perfil.json`.
+2. Apuntar la base al perfil con un `local.json` en la raíz del repo (no se versiona):
+   ```json
+   { "perfil": "../mi-perfil" }
+   ```
+3. Instalar el plugin de captura para ese perfil:
+   ```
+   py -3 scripts/instalar.py
+   ```
+   El instalador:
+   - registra el `python.exe` real (rechaza el alias de la Microsoft Store);
+   - genera `plugin/hooks/hooks.json` y la skill `/oficina:abrir`;
+   - escribe `<datos>/config.json`;
+   - instala el plugin `oficina@agents-office` a nivel usuario.
+
+   Los hooks empiezan a capturar en las sesiones nuevas.
+
+Si se mueve o se renombra la carpeta del repo, hay que volver a correr el instalador: el plugin se lee desde `plugin/` de esta carpeta.
+
+## Uso diario
+
+- Desde Claude Code: `/oficina:abrir`.
+- Desde PowerShell: `.\iniciar-oficina.ps1`. Levanta el servidor en segundo plano, si no estaba corriendo, y abre `http://127.0.0.1:8765/`. Con `-Detener` lo apaga.
+- A mano: `py -3 -m servidor [--perfil CARPETA] [--puerto N]`.
+
+La pantalla tiene cuatro partes:
+- **Cabecera:** el agente principal y el conteo de estados.
+- **Piso:** quién trabaja, espera, piensa, tiene un error o está ocioso.
+- **Siete pestañas** de solo lectura: aprobaciones, flujos, actividad, tareas, memoria, corridas y catálogo.
+- **Barra de tarjetas:** una por agente. Al tocar una, la selección filtra las pestañas.
+
+En el teléfono, el plano queda arriba, los agentes abajo y los paneles en otra vista.
+
+## Datos
+
+| Qué | Dónde |
+|---|---|
+| Eventos capturados (uno por día, se borran a los 14 días) | `<datos>/eventos/AAAA-MM-DD.jsonl` |
+| Errores del hook (sin contenido) | `<datos>/errores.log` |
+| Config del hook (la genera el instalador) | `<datos>/config.json` |
+| Salida del servidor | `<datos>/servidor.log` |
+
+`<datos>` es la carpeta `datos` del perfil (por defecto `~/.agents-office`). Se puede borrar entera en cualquier momento; el próximo `instalar.py` vuelve a crear la config. Los eventos guardan nombres de herramientas, rutas y resúmenes cortos, nunca prompts, mensajes ni contenido de archivos.
+
+## Agentes nuevos
+
+Un agente nuevo en `.claude/agents/` del equipo aparece solo en la **recepción**, marcado "sin zona". Para darle lugar:
+1. Agregar una regla en `zonas.json` del perfil: `{ "agente": "mi-agente", "zona": "lectura" }`. Los patrones como `lente-*` valen.
+2. Opcional: fijar su sprite en `sprites.json` y su nombre corto en `perfil.json` → `piso.nombres_cortos`.
+
+Los cambios se toman al recargar la página. Si hace falta, se suman escritorios con el editor del piso (botón "Editar piso", en escritorio).
+
+## Desinstalar
 
 ```
-# 1. Compilar la web (una vez, o después de cambiarla)
-cd web/pixel-agents && npm install && npm run build
-
-# 2. Elegir el perfil: local.json en la raíz -> {"perfil": "../mi-perfil"}
-# 3. Instalar el plugin de captura para ese perfil
-py -3 scripts/instalar.py
-
-# 4. Levantar la oficina
-py -3 -m servidor            # http://127.0.0.1:8765/
+claude plugin uninstall oficina@agents-office
+claude plugin marketplace remove agents-office
 ```
 
-Para probar sin un equipo real, el simulador escribe eventos ficticios en una carpeta aparte:
+Después, opcionalmente, borrar la carpeta `<datos>`.
 
-```
-py -3 scripts/simular.py --datos %TEMP%\agents-office-sim
-set AGENTS_OFFICE_DATOS=%TEMP%\agents-office-sim
-py -3 -m servidor
-```
+## Desarrollo
 
-Pruebas: `py -3 -m unittest discover -s tests` (siempre con el perfil de ejemplo).
+- **Recompilar la web** (después de cambiar `web/pixel-agents/webview-ui/src/idi`):
+  ```
+  cd web/pixel-agents
+  npm install
+  npm run build
+  ```
+  Escribe en `web/dist`, que se versiona. Ver `web/pixel-agents/ORIGEN.md`.
+- **Probar sin un equipo real:** el simulador escribe eventos ficticios en una carpeta aparte.
+  ```
+  py -3 scripts/simular.py --datos %TEMP%\agents-office-sim
+  set AGENTS_OFFICE_DATOS=%TEMP%\agents-office-sim
+  py -3 -m servidor
+  ```
+- **Pruebas:** `py -3 -m unittest discover -s tests`. Usan siempre el perfil de ejemplo.
 
 ## Qué garantiza
 

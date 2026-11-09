@@ -1,6 +1,6 @@
 {
   "name": "oficina",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Captura redactada de los eventos de las sesiones de un equipo de agentes, para la oficina local.",
   "author": { "name": "mcampoy" }
 }

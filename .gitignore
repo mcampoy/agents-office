@@ -7,5 +7,5 @@ __pycache__/
 # Respaldos del editor del piso
 **/layout.json.bak
 **/layout.json.tmp
-# Build de la web (se genera con npm run build en web/pixel-agents)
-web/dist/
+# web/dist SÍ se versiona: así el uso diario no necesita Node (se regenera con npm run build)
+plugin/skills/abrir/SKILL.md

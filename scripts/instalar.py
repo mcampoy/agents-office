@@ -8,6 +8,7 @@ El perfil se elige igual que en el servidor: --perfil, AGENTS_OFFICE_PERFIL, loc
    Rechaza el alias de la Microsoft Store: en la forma exec de los hooks no sirve.
 2. Genera plugin/hooks/hooks.json con esa ruta y la carpeta de datos del perfil (`--datos`).
 3. Escribe <datos>/config.json con lo que el hook necesita del perfil (carpeta del equipo, scripts, canales).
+   Genera también plugin/skills/abrir/SKILL.md (/oficina:abrir) con la ruta de iniciar-oficina.ps1.
 4. Registra el marketplace local e instala el plugin (salvo con --solo-generar).
 """
 import json
@@ -67,6 +68,34 @@ def escribir_config(python, perfil, datos):
     return destino
 
 
+SKILL_ABRIR = """---
+name: abrir
+description: Levanta la oficina de agentes local (si no está corriendo) y la abre en el navegador. Usar cuando la persona pide abrir, ver o mostrar la oficina.
+---
+
+# Abrir la oficina
+
+Corré este comando (PowerShell), sin cambiarlo:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File "{script}"
+```
+
+- Si dice que la oficina ya está corriendo o que la levantó, contestá en una línea con la URL que imprimió.
+- Si dice que el python.exe registrado ya no existe, decí que hay que reinstalar con `py -3 scripts\\instalar.py` en `{repo}`.
+- Si avisa que falta la web compilada, decilo: se ve la vista básica hasta compilar `web\\pixel-agents` con `npm run build`.
+- La oficina es de solo lectura: no ofrezcas aprobar permisos ni lanzar agentes desde ella.
+"""
+
+
+def generar_skill():
+    """plugin/skills/abrir/SKILL.md con la ruta de iniciar-oficina.ps1 de esta máquina (no se versiona)."""
+    destino = REPO / "plugin" / "skills" / "abrir" / "SKILL.md"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(SKILL_ABRIR.format(script=REPO / "iniciar-oficina.ps1", repo=REPO), encoding="utf-8")
+    return destino
+
+
 def claude(*args):
     ejecutable = shutil.which("claude") or "claude"
     r = subprocess.run([ejecutable, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -83,6 +112,7 @@ def main():
     print(f"python: {python}")
     print(f"hooks: {generar_hooks(python, datos)}")
     print(f"config: {escribir_config(python, perfil, datos)}")
+    print(f"skill /oficina:abrir: {generar_skill()}")
     if "--solo-generar" in sys.argv:
         return 0
     claude("plugin", "marketplace", "add", str(REPO))
