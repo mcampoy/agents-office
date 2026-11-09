@@ -865,5 +865,38 @@ class PensandoYSubagentesOciosos(unittest.TestCase):
         self.assertEqual(self.estado(400, "s1:principal")["estado"], "ocioso")  # a1 ocioso: ya no lo espera
 
 
+class CandidatoAAgente(unittest.TestCase):
+    """Fase 0, punto 11: 3 lanzamientos de generales con descripciones parecidas en 14 días = candidato."""
+
+    def escribir(self, carpeta, dia, descripciones, tipo="general-purpose"):
+        lineas = [json.dumps({"ts": f"{dia}T10:00:0{i}-03:00", "evento": "PreToolUse", "tool_name": "Agent",
+                              "resumen": {"subagent_type": tipo, "description": d}}) for i, d in enumerate(descripciones)]
+        (carpeta / f"{dia}.jsonl").write_text("".join(linea + "\n" for linea in lineas), encoding="utf-8")
+
+    def test_grupo_de_tres_parecidos(self):
+        from servidor.candidatos import Candidatos
+        with tempfile.TemporaryDirectory() as tmp:
+            c = Path(tmp)
+            self.escribir(c, "2026-11-01", ["comparar precios de APIs de modelos de OpenAI"])
+            self.escribir(c, "2026-11-05", ["comparar precios de APIs de modelos de Mistral",
+                                            "resumir noticias"])          # corta: menos de 3 palabras útiles
+            self.escribir(c, "2026-11-09", ["Comparar los precios de las APIs de modelos (Cohere)",
+                                            "redactar correo de seguimiento al cliente"])
+            self.escribir(c, "2026-10-01", ["comparar precios de APIs de modelos"])  # fuera de los 14 días
+            self.escribir(c, "2026-11-08", ["comparar precios de APIs de modelos"], tipo="investigador-proveedor")
+            r = Candidatos(c).calcular(dt.date(2026, 11, 9), lambda t: t == "general-purpose",
+                                       ["temas/registry/providers/mistral.md", "temas/registry/providers/cohere.md"])
+            self.assertEqual(len(r), 1)
+            self.assertEqual(r[0]["lanzamientos"], 3)
+            self.assertEqual(r[0]["palabras"], ["apis", "comparar", "modelos", "precios"])
+            self.assertEqual(r[0]["tipos"], ["general-purpose"])
+
+    def test_dos_no_alcanzan(self):
+        from servidor.candidatos import Candidatos
+        with tempfile.TemporaryDirectory() as tmp:
+            self.escribir(Path(tmp), "2026-11-09", ["comparar precios de APIs de modelos"] * 2)
+            self.assertEqual(Candidatos(tmp).calcular(dt.date(2026, 11, 9), lambda t: True), [])
+
+
 if __name__ == "__main__":
     unittest.main()

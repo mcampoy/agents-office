@@ -6,11 +6,10 @@ import type { Conexion, Recursos } from './datos.ts';
 import { useFoto } from './datos.ts';
 import { COLOR_ESTADO, duracion, grupo, modeloCorto, nombre, textoEstado } from './estados.ts';
 import { perfil } from './perfil.ts';
+import { Pestanas } from './Pestanas.tsx';
 import { Piso } from './Piso.tsx';
 import { ControlPiso, visibleEnPiso } from './piso.ts';
 import type { Foto, Instancia } from './tipos.ts';
-
-const PESTANAS = ['Aprobaciones', 'Flujos', 'Actividad', 'Tareas', 'Memoria', 'Corridas', 'Catálogo'];
 
 function subagentesActivos(foto: Foto, sesion: string): number {
   return foto.instancias.filter((x) => !x.principal && x.sesion === sesion && !['terminado', 'ocioso'].includes(x.estado)).length;
@@ -187,29 +186,6 @@ function Tarjetas({
   );
 }
 
-function Pestanas({ seleccion, foto }: { seleccion: string | null; foto: Foto | null }) {
-  const [activa, setActiva] = useState(0);
-  const inst = foto?.instancias.find((i) => i.clave === seleccion);
-  return (
-    <aside className="idi-pestanas">
-      <nav className="flex flex-wrap">
-        {PESTANAS.map((p, k) => (
-          <button key={p} className={`idi-pestana ${k === activa ? 'idi-pestana-sel' : ''}`} onClick={() => setActiva(k)}>
-            {p}
-          </button>
-        ))}
-      </nav>
-      <div className="p-12 idi-tenue">
-        {inst && (
-          <p className="mb-8" style={{ color: 'var(--color-text)' }}>
-            Filtro: {inst.etiqueta_historial}
-          </p>
-        )}
-        <p>Las pestañas se implementan en la fase 4.</p>
-      </div>
-    </aside>
-  );
-}
 
 export function Oficina({ recursos }: { recursos: Recursos }) {
   const { foto, conexion } = useFoto();
@@ -240,7 +216,7 @@ export function Oficina({ recursos }: { recursos: Recursos }) {
               <Tarjetas foto={foto} seleccion={seleccion} onSeleccion={setSeleccion} modo="lista" />
             </>
           )}
-          {vista === 'paneles' && <Pestanas seleccion={seleccion} foto={foto} />}
+          {vista === 'paneles' && <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} />}
         </main>
         <nav className="idi-nav" aria-label="Vistas" style={{ gridTemplateColumns: `repeat(${VISTAS.length}, 1fr)` }}>
           {VISTAS.map((v) => (
@@ -260,7 +236,7 @@ export function Oficina({ recursos }: { recursos: Recursos }) {
         <section className="idi-piso">
           <Piso os={os} control={control} foto={foto} muebles={recursos.muebles} seleccion={seleccion} onSeleccion={setSeleccion} />
         </section>
-        <Pestanas seleccion={seleccion} foto={foto} />
+        <Pestanas seleccion={seleccion} foto={foto} onLimpiar={() => setSeleccion(null)} />
       </main>
       <Tarjetas foto={foto} seleccion={seleccion} onSeleccion={setSeleccion} />
     </div>

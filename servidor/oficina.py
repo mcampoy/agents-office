@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from .area import Area
+from .candidatos import Candidatos
 from .catalogo import Catalogo
 from .eventos import LectorEventos
 from .flujos import Flujos
@@ -42,6 +43,7 @@ class Oficina:
         self.flujos = Flujos({"verificador": self.perfil["verificador"], **self.perfil.archivo("flujos.json", {})}, self.area)
         self.catalogo = Catalogo(self.equipo, self.zonas, self.area)
         self.lector = LectorEventos(self.datos / "eventos")
+        self.candidatos = Candidatos(self.datos / "eventos")
         self.umbrales = self.config.get("umbrales", {})
         self._conocidos = []
         self._barrido_en = None
@@ -154,6 +156,10 @@ class Oficina:
                 "en_curso": any(not s["fin"] for s in corrida_sesiones),
             },
             "salud": self.salud(ahora),
+            "candidatos": self.candidatos.calcular(
+                ahora.date(),
+                lambda tipo: tipo in self.zonas.get("generales", []) or (bool(agentes) and tipo not in agentes),
+                self.conocidos()),
         }
 
     def salud(self, ahora):
