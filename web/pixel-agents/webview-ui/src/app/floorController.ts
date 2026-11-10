@@ -40,6 +40,8 @@ interface Visit {
 }
 
 const BUSY = (state: string) => state !== 'idle' && state !== 'done';
+/** Not working and not on the way out: rests in the café (the lounge) until it works again. */
+const RESTING = (i: Instance) => i.state === 'idle' || (i.state === 'done' && !(i.general && !i.main));
 
 interface Token {
   id: number;
@@ -157,8 +159,9 @@ export class FloorController {
   }
 
   private seatFor(i: Instance): string | null {
-    // A subagent that already finished (for example on page reload) shows up directly in the lounge
-    if (i.state === 'done' && !i.main && !i.general) {
+    // Whoever is not working (turn ended or idle) shows up directly in the café, the lounge (for example on page
+    // reload); a generic subagent that finished is on its way out instead
+    if (RESTING(i)) {
       const armchair = this.free(LOUNGE)[0];
       if (armchair) return armchair;
     }
@@ -305,14 +308,19 @@ export class FloorController {
         mode = 'walks';
         break;
       case 'done':
-        mode = i.main ? 'seated' : i.general ? 'walks' : 'sofa';
-        break;
       case 'idle':
+        mode = RESTING(i) ? 'sofa' : 'walks';
+        break;
       default:
         mode = 'standing';
     }
     const changed = mode !== t.mode;
     t.mode = mode;
+    // Back to work from the café: to a desk of its room (or the overflow), never typing on the sofa
+    if ((mode === 'works' || mode === 'seated') && ch.seatId && this.os.seatZone(ch.seatId) === LOUNGE) {
+      const desk = this.seatFor(i);
+      if (desk) this.os.reassignSeat(t.id, desk);
+    }
     if (this.visits.has(t.id)) {
       // Out asking someone: goes back to its desk when the visit ends
       this.os.setAgentTool(t.id, null);
