@@ -8,6 +8,7 @@
 //                change; skin, hair and eyes stay intact
 //   char_24      the owner's avatar, derived from char_4 by layers (hair, glasses, beard, infinity,
 //                sneakers). See docs/avatar.md
+//   char_25      the orchestrator (the current session's main agent): Claude's crab, drawn from scratch
 //   cast.json    which index is what
 //
 // Format of each sheet: 112×96, 16×32 frames, 7 per row (walk ×3, type ×2, read ×2),
@@ -247,6 +248,101 @@ function avatar() {
   return png;
 }
 
+// --- Orchestrator: Claude's crab --------------------------------------------------------------
+//
+// Drawn from scratch (it derives from no base sprite). Body 12×9, arms on the sides, four legs.
+// It stands in the lower half of the frame, where a person's legs and torso go.
+
+const CRAB = {
+  body: '#d97757',
+  shade: '#b65c40',
+  eye: '#1e1410',
+  sheet: '#f4efe6',
+  ink: '#9a9187',
+};
+
+/** Top row of the body per row of the sheet and per pose (walking or seated), so the feet land where a
+ *  person's do: row 29 standing; seated facing down it sits higher, so it shows above the desk like a person's
+ *  head; facing up the chair hides the legs. */
+const CRAB_TOP = {
+  down: { walk: 17, seated: 15 },
+  up: { walk: 17, seated: 16 },
+  right: { walk: 17, seated: 17 },
+};
+
+function rect(png, ox, oy, x0, x1, y0, y1, c) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (y >= 0 && y < H) paint(png, ox + x, oy + y, c);
+}
+
+/**
+ * One frame of the crab.
+ * view: 'down' | 'up' | 'right'. legs: 'all' | 'a' | 'b' (pair raised) | 'none'. arms: 0 or -1 (raised one row).
+ * sheet: null, 0 or 1 (reading, with the line of text that moves).
+ */
+function crabFrame(png, ox, oy, { view, top, legs, arms, sheet }) {
+  const side = view === 'right';
+  const [x0, x1] = side ? [3, 12] : [2, 13];
+  // Legs (behind the body): four, the raised pair one row shorter
+  if (legs !== 'none') {
+    const cols = side ? [4, 6, 9, 11] : [3, 5, 10, 12];
+    cols.forEach((x, k) => {
+      const raised = (legs === 'a' && k % 2 === 0) || (legs === 'b' && k % 2 === 1);
+      rect(png, ox, oy, x, x, top + 9, top + 9 + (raised ? 2 : 3), CRAB.body);
+    });
+  }
+  // Body, with a shaded bottom row
+  rect(png, ox, oy, x0, x1, top, top + 7, CRAB.body);
+  rect(png, ox, oy, x0, x1, top + 8, top + 8, CRAB.shade);
+  if (view === 'up') rect(png, ox, oy, x0 + 1, x1 - 1, top + 1, top + 1, CRAB.shade);
+  // Arms
+  const ay = top + 4 + arms;
+  if (side) {
+    rect(png, ox, oy, 13, 14, ay, ay + 1, CRAB.body);
+    rect(png, ox, oy, 2, 2, ay, ay + 1, CRAB.shade);
+  } else {
+    rect(png, ox, oy, 0, 1, ay, ay + 1, CRAB.body);
+    rect(png, ox, oy, 14, 15, ay, ay + 1, CRAB.body);
+  }
+  // Eyes: two looking down, one in profile, none from behind
+  if (view === 'down') {
+    rect(png, ox, oy, 5, 5, top + 2, top + 3, CRAB.eye);
+    rect(png, ox, oy, 10, 10, top + 2, top + 3, CRAB.eye);
+  } else if (side) {
+    rect(png, ox, oy, 10, 10, top + 2, top + 3, CRAB.eye);
+  }
+  // Sheet held in front while reading
+  if (sheet !== null && view !== 'up') {
+    const [sx0, sx1] = side ? [12, 15] : [4, 11];
+    rect(png, ox, oy, sx0, sx1, top + 4, top + 9, CRAB.sheet);
+    for (const dy of [5 + sheet, 7 + sheet]) rect(png, ox, oy, sx0 + 1, sx1 - 1, top + dy, top + dy, CRAB.ink);
+  }
+}
+
+function orchestrator() {
+  const png = new PNG({ width: W * FRAMES, height: H * 3 });
+  png.data.fill(0);
+  ['down', 'up', 'right'].forEach((view, row) => {
+    const oy = row * H;
+    const walk = CRAB_TOP[view].walk;
+    const seated = CRAB_TOP[view].seated;
+    const feet = view === 'up' ? 'none' : 'all';
+    const poses = [
+      // Walk ×3
+      { top: walk, legs: 'a', arms: 0, sheet: null },
+      { top: walk, legs: 'all', arms: 0, sheet: null },
+      { top: walk, legs: 'b', arms: 0, sheet: null },
+      // Type ×2: the arms go up and down
+      { top: seated, legs: feet, arms: 0, sheet: null },
+      { top: seated, legs: feet, arms: -1, sheet: null },
+      // Read ×2: holds a sheet, the line of text moves
+      { top: seated, legs: feet, arms: 0, sheet: 0 },
+      { top: seated, legs: feet, arms: 0, sheet: 1 },
+    ];
+    poses.forEach((pose, f) => crabFrame(png, f * W, oy, { view, ...pose }));
+  });
+  return png;
+}
+
 // --- Enlarged preview (to review and document) ----------------------------------------------
 
 function preview(sheets, scale = 4) {
@@ -289,19 +385,27 @@ function main() {
   const avatarIndex = sheets.length;
   sheets.push(avatar());
   characters.push({ index: avatarIndex, base: 4, variant: 'owner avatar' });
+  const orchestratorIndex = sheets.length;
+  sheets.push(orchestrator());
+  characters.push({ index: orchestratorIndex, base: null, variant: 'orchestrator' });
 
   sheets.forEach((png, i) => fs.writeFileSync(path.join(OUTPUT, `char_${i}.png`), PNG.sync.write(png)));
+  const reserved = new Set([avatarIndex, orchestratorIndex, 4]);
   const meta = {
     generated_by: 'web/pixel-agents/tools/sprites.mjs',
     avatar: avatarIndex,
-    // Pool to assign to agents: everything but the avatar and the original char_4, which looks too similar
-    assignable: characters.filter((p) => p.index !== avatarIndex && p.index !== 4).map((p) => p.index),
+    // The main agent of the current session (the one the owner talks to)
+    orchestrator: orchestratorIndex,
+    // Pool to assign to agents: everything but the avatar, the orchestrator and the original char_4, which
+    // looks too similar to the avatar
+    assignable: characters.filter((p) => !reserved.has(p.index)).map((p) => p.index),
     characters,
   };
   fs.writeFileSync(path.join(OUTPUT, '..', 'cast.json'), JSON.stringify(meta, null, 2));
   fs.writeFileSync(path.join(OUTPUT, '..', '..', 'avatar-preview.png'), PNG.sync.write(preview([read(4), sheets[avatarIndex]], 6)));
   fs.writeFileSync(path.join(OUTPUT, '..', '..', 'variants-preview.png'), PNG.sync.write(preview(sheets.slice(0, avatarIndex), 2)));
-  console.log(`[sprites] ${sheets.length} sheets in ${OUTPUT} (avatar = char_${avatarIndex})`);
+  fs.writeFileSync(path.join(OUTPUT, '..', '..', 'orchestrator-preview.png'), PNG.sync.write(preview([read(0), sheets[orchestratorIndex]], 6)));
+  console.log(`[sprites] ${sheets.length} sheets in ${OUTPUT} (avatar = char_${avatarIndex}, orchestrator = char_${orchestratorIndex})`);
 }
 
 main();

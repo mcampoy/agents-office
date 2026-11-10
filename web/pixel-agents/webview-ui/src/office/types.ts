@@ -169,6 +169,8 @@ export interface OfficeLayout {
 
 export interface Character {
   id: number;
+  /** Drawing scale (office): the orchestrator is drawn larger. Rounded so pixels stay whole. */
+  scale?: number;
   state: CharacterState;
   dir: Direction;
   /** Pixel position */

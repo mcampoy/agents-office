@@ -16,6 +16,8 @@ export const DONE_REST_S = 180;
 const OWNER_DWELL_S = 5;
 /** The main agent stays this long at each subagent's desk when delegating. */
 const DELEGATE_DWELL_S = 3;
+/** The orchestrator (Claude's crab) is drawn this much larger: it is short and stands out as the one in charge. */
+const ORCHESTRATOR_SCALE = 1.5;
 /** A visit that never arrives (blocked path) gives up after this long. */
 const VISIT_TIMEOUT_S = 40;
 /** If the owner cannot walk to the main agent, the request bubble shows at the desk this long. */
@@ -77,6 +79,9 @@ export class FloorController {
   private byId = new Map<number, Token>();
   private nextId = 1;
   private spriteByType = new Map<string, number>();
+  /** Key of the orchestrator: the current session's main agent, the one the owner talks to. It is Claude's crab
+   *  and the only one at the Coordination desk; the other sessions' main agents look like their type. */
+  private orchestrator: string | null = null;
   /** Newest owner prompt seen (ms). Only a newer one counts: with several sessions open, the server's
    *  "current" session alternates and last_prompt goes back and forth between their prompts. */
   private lastPromptMs: number | undefined = undefined;
@@ -138,6 +143,10 @@ export class FloorController {
     return chosen;
   }
 
+  private spriteFor(i: Instance): number {
+    return i.key === this.orchestrator ? this.characters.orchestrator : this.spriteOf(i.type);
+  }
+
   // --- Seats ---------------------------------------------------------------------------------
 
   private free(zone: string): string[] {
@@ -166,6 +175,8 @@ export class FloorController {
       const armchair = this.free(LOUNGE)[0];
       if (armchair) return armchair;
     }
+    // Coordination is the orchestrator's: the other sessions' main agents work in the coworking
+    if (i.main && i.key !== this.orchestrator) return this.free(FLOATING)[0] ?? this.free(RECEPTION)[0] ?? null;
     let candidates = this.free(i.zone);
     const clockAgent = profile().floor.next_to_clock;
     if (clockAgent && i.type === clockAgent) {
@@ -198,10 +209,10 @@ export class FloorController {
   sync(snapshot: Snapshot, initial: boolean): void {
     const present = new Set<string>();
     const launched: Token[] = [];
-    // Seats go in arrival order: busy main agents (the current session first) sit down first, so on load the
-    // coordination desk is already theirs instead of an idle one handing it over across the hallway
-    const current = snapshot.main?.session;
-    const rank = (i: Instance) => (i.main ? (BUSY(i.state) ? (i.session === current ? 0 : 1) : 2) : 3);
+    this.orchestrator = snapshot.main?.key ?? null;
+    // Seats go in arrival order: the orchestrator sits down first, so on load the coordination desk is already
+    // its own instead of being handed over across the hallway
+    const rank = (i: Instance) => (i.key === this.orchestrator ? 0 : i.main ? 1 : 2);
     const ordered = [...snapshot.instances].sort((a, b) => rank(a) - rank(b));
     for (const inst of ordered) {
       if (!visibleOnFloor(inst)) continue;
@@ -210,13 +221,20 @@ export class FloorController {
       if (!t) {
         const id = this.nextId++;
         const seat = this.seatFor(inst);
-        this.os.addAgent(id, this.spriteOf(inst.type), 0, seat ?? undefined, initial);
+        this.os.addAgent(id, this.spriteFor(inst), 0, seat ?? undefined, initial);
         t = { id, key: inst.key, inst, mode: null, target: null };
         this.tokens.set(inst.key, t);
         this.byId.set(id, t);
         if (!initial && !inst.main) launched.push(t);
       }
       t.inst = inst;
+      // The current session changed: the crab moves to its main agent and the previous one gets its own look back
+      const ch = this.os.characters.get(t.id);
+      const sprite = this.spriteFor(inst);
+      if (ch) {
+        ch.palette = sprite;
+        ch.scale = inst.key === this.orchestrator ? ORCHESTRATOR_SCALE : undefined;
+      }
     }
     for (const [key, t] of this.tokens) {
       if (!present.has(key)) {
@@ -226,45 +244,31 @@ export class FloorController {
       }
     }
     for (const t of this.tokens.values()) this.applyState(t);
-    this.coordination(snapshot);
+    this.coordination();
     this.delegate(launched);
     this.avatar(snapshot, initial);
   }
 
-  /** The main agents' room has room for one: it belongs to a main agent that is working. An idle or finished
-   *  one gives up the desk to a busy one (they swap seats); a busy one is never moved, so two sessions
-   *  working at the same time do not swap back and forth. */
-  private coordination(snapshot: Snapshot): void {
-    const mains = [...this.tokens.values()].filter((t) => t.inst.main);
-    const zone = mains[0]?.inst.zone;
-    if (!zone) return;
+  /** The main agents' room has room for one, and it is the orchestrator's. The other sessions' main agents that
+   *  are there (it was theirs before the current session changed) go to the coworking; the orchestrator, when
+   *  it works, takes the desk. Nobody is moved while out on a visit. */
+  private coordination(): void {
+    const orchestrator = this.orchestrator ? this.tokens.get(this.orchestrator) : undefined;
+    if (!orchestrator) return;
+    const zone = orchestrator.inst.zone;
     const seatOf = (t: Token) => this.os.characters.get(t.id)?.seatId ?? null;
     const inZone = (t: Token) => {
       const seat = seatOf(t);
       return seat !== null && this.os.seatZone(seat) === zone;
     };
-    const current = snapshot.main?.session;
-    const waiting = mains
-      .filter((t) => !inZone(t) && BUSY(t.inst.state) && !this.visits.has(t.id))
-      .sort((a, b) => Number(b.inst.session === current) - Number(a.inst.session === current));
-    for (const c of waiting) {
-      const free = this.free(zone)[0];
-      if (free) {
-        this.os.reassignSeat(c.id, free);
-        continue;
-      }
-      const holder = mains.find((t) => inZone(t) && !BUSY(t.inst.state) && !this.visits.has(t.id));
-      if (!holder) return;
-      const theirs = seatOf(holder)!;
-      const mine = seatOf(c) ?? this.free(FLOATING)[0] ?? this.free(RECEPTION)[0];
-      if (!mine) return;
-      // reassignSeat only takes a free seat: free the newcomer's seat for the holder, then take the holder's
-      const seat = this.os.seats.get(mine)!;
-      seat.assigned = false;
-      this.os.reassignSeat(holder.id, mine);
-      this.os.reassignSeat(c.id, theirs);
-      seat.assigned = true;
+    for (const t of this.tokens.values()) {
+      if (t === orchestrator || !t.inst.main || !inZone(t) || this.visits.has(t.id)) continue;
+      const elsewhere = this.free(FLOATING)[0] ?? this.free(RECEPTION)[0];
+      if (elsewhere) this.os.reassignSeat(t.id, elsewhere);
     }
+    if (inZone(orchestrator) || !BUSY(orchestrator.inst.state) || this.visits.has(orchestrator.id)) return;
+    const desk = this.free(zone)[0];
+    if (desk) this.os.reassignSeat(orchestrator.id, desk);
   }
 
   /** A main agent that launches subagents leaves its office and asks each one in person. */

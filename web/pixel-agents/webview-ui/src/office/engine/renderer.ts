@@ -384,7 +384,9 @@ export function renderScene(
   for (const ch of characters) {
     const sprites = getCharacterSprites(ch.palette, ch.hueShift);
     const spriteData = getCharacterSprite(ch, sprites);
-    const cached = getCachedSprite(spriteData, zoom);
+    // Office: a character can be drawn larger (the orchestrator), at a whole number of device pixels per pixel
+    const z = ch.scale ? Math.max(zoom + 1, Math.round(zoom * ch.scale)) : zoom;
+    const cached = getCachedSprite(spriteData, z);
     // Sitting offset: shift character down when seated so they visually sit in the chair
     const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
     // Anchor at bottom-center of character — round to integer device pixels
@@ -424,9 +426,9 @@ export function renderScene(
     if (isSelected || isHovered) {
       const outlineAlpha = isSelected ? SELECTED_OUTLINE_ALPHA : HOVERED_OUTLINE_ALPHA;
       const outlineData = getOutlineSprite(spriteData);
-      const outlineCached = getCachedSprite(outlineData, zoom);
-      const olDrawX = drawX - zoom; // 1 sprite-pixel offset, scaled
-      const olDrawY = drawY - zoom; // outline follows sitting offset via drawY
+      const outlineCached = getCachedSprite(outlineData, z);
+      const olDrawX = drawX - z; // 1 sprite-pixel offset, scaled
+      const olDrawY = drawY - z; // outline follows sitting offset via drawY
       drawables.push({
         zY: charZY - OUTLINE_Z_SORT_OFFSET, // sort just before character
         draw: (c) => {
