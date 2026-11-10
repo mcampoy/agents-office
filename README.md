@@ -91,9 +91,9 @@ La oficina avisa en dos momentos, cada uno con su sonido:
 - **Terminó el turno** de la sesión principal: es momento de revisar o de asignar otra tarea.
 - **Espera algo tuyo:** un permiso o una respuesta, de la sesión principal o de un subagente. Este aviso queda más tiempo en pantalla.
 
-En la compu los muestra Windows, aunque la oficina esté cerrada. El instalador los deja activados; `py -3 scripts/notify.py --disable` los apaga, `--enable` los vuelve a prender y `--test` muestra los dos de ejemplo. Si no aparecen, revisá *Configuración > Sistema > Notificaciones* y que no esté activo *No molestar*.
+Los muestra Windows, aunque la oficina esté cerrada. El instalador los deja activados; `py -3 scripts/notify.py --disable` los apaga, `--enable` los vuelve a prender y `--test` muestra los dos de ejemplo. Si no aparecen, revisá *Configuración > Sistema > Notificaciones* y que no esté activo *No molestar*.
 
-En el celular, el botón 🔕 de la cabecera activa los avisos con sonido y vibración (el navegador pide un toque antes de dejar sonar a una página). Solo suenan **con la oficina abierta y a la vista**: por http, el celular no permite notificaciones del sistema. En la compu ese botón no aparece, para no repetir los avisos de Windows.
+En el celular no hay avisos: por http, el navegador del celular no permite notificaciones del sistema, y resolverlo exigiría un servicio de terceros.
 
 Los avisos nunca llevan el texto de prompts, mensajes ni comandos: solo el proyecto, el tipo de aviso y el nombre de la herramienta.
 
