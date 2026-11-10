@@ -40,6 +40,9 @@ interface Visit {
 }
 
 const BUSY = (state: string) => state !== 'idle' && state !== 'done';
+/** Not working and not on the way out: rests in the café (the lounge) until it works again. */
+const RESTING = (i: Instance) =>
+  !i.closed && (i.state === 'idle' || (i.state === 'done' && !(i.general && !i.main)));
 
 interface Token {
   id: number;
@@ -157,8 +160,9 @@ export class FloorController {
   }
 
   private seatFor(i: Instance): string | null {
-    // A subagent that already finished (for example on page reload) shows up directly in the lounge
-    if (i.state === 'done' && !i.main && !i.general) {
+    // Whoever is not working (turn ended or idle) shows up directly in the café, the lounge (for example on page
+    // reload); a generic subagent that finished is on its way out instead
+    if (RESTING(i)) {
       const armchair = this.free(LOUNGE)[0];
       if (armchair) return armchair;
     }
@@ -305,14 +309,19 @@ export class FloorController {
         mode = 'walks';
         break;
       case 'done':
-        mode = i.main ? 'seated' : i.general ? 'walks' : 'sofa';
-        break;
       case 'idle':
+        mode = RESTING(i) ? 'sofa' : 'walks';
+        break;
       default:
         mode = 'standing';
     }
     const changed = mode !== t.mode;
     t.mode = mode;
+    // Back to work from the café: to a desk of its room (or the overflow), never typing on the sofa
+    if ((mode === 'works' || mode === 'seated') && ch.seatId && this.os.seatZone(ch.seatId) === LOUNGE) {
+      const desk = this.seatFor(i);
+      if (desk) this.os.reassignSeat(t.id, desk);
+    }
     if (this.visits.has(t.id)) {
       // Out asking someone: goes back to its desk when the visit ends
       this.os.setAgentTool(t.id, null);
@@ -348,7 +357,8 @@ export class FloorController {
         const p = this.mainOf(i.session);
         this.walkTo(t.id, p ? this.nextTo(p.id) : null);
       } else {
-        // A general agent that finished: heads to the reception (the exit) until the server removes it
+        // A general agent that finished, or anyone whose session closed: heads to the reception (the exit) until
+        // the server removes it
         this.walkTo(t.id, this.freeTile(RECEPTION));
       }
     }
@@ -494,6 +504,12 @@ export class FloorController {
       c0 = Math.min(c0, c); r0 = Math.min(r0, r); c1 = Math.max(c1, c); r1 = Math.max(r1, r);
     });
     return c1 < 0 ? null : { c0, r0, c1, r1 };
+  }
+
+  /** Resting in the café (turn ended or idle): the floor shows one sign for all of them instead of each tag. */
+  resting(id: number): boolean {
+    const t = this.byId.get(id);
+    return !!t && t.mode === 'sofa' && !this.visits.has(id);
   }
 
   visibleTokens(): Array<{ id: number; inst: Instance }> {

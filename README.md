@@ -48,10 +48,13 @@ Requisitos: Windows, Claude Code, Python 3.12+ (solo librería estándar) y Node
    ```
    El script:
    - arma el perfil en `~/.agents-office/profiles/<id>/`, ubicando a cada agente de `.claude/agents` en una sala (las lentes en lectura, el verificador en el paso…);
+   - arma un plano a medida: solo las salas que el proyecto puede usar, cada una con los escritorios que necesitan sus agentes y uno de margen;
    - crea `pendientes.md` y `fricciones.md` si no existen;
    - con `--claude-md`, les pide a los agentes del proyecto que mantengan los tablones.
 
    Para un perfil hecho a mano: `--profile <carpeta>`. Para dar de baja: `--remove`.
+
+   Si el equipo crece o se achica, `configure.py` avisa cuando el plano quedó chico; `--relayout --apply` lo regenera y guarda el anterior en `layout.json.bak` (puede tener cambios hechos con el editor del piso). Solo vale para los perfiles que arma `configure.py`: uno hecho a mano (`--profile`) mantiene su propio plano. Los agentes sin sala propia trabajan en el **Coworking**, y los que no están trabajando descansan en el **Café**.
 
 Solo se registran las sesiones de los proyectos configurados; el resto no deja rastro. Si se mueve o se renombra la carpeta de este repo, hay que volver a correr el instalador.
 

@@ -209,6 +209,34 @@ class Launches(unittest.TestCase):
         self.assertNotIn("g1", instances(m.snapshot(T0 + dt.timedelta(seconds=400))))
         self.assertEqual(len(m.snapshot(T0)["general_launches"]), 1)
 
+    def test_closed_session_leaves_the_floor(self):
+        events = [main(0, "SessionStart"), main(1, "UserPromptSubmit", summary={"origin": "user"}),
+                  main(5, "Stop"), main(6, "SessionEnd", summary={"reason": "exit"})]
+        m = model(events)
+        # Right after closing, the main agent is still there, marked closed: it walks to the exit
+        p = instances(m.snapshot(T0 + dt.timedelta(seconds=10)))["s1:main"]
+        self.assertTrue(p["closed"])
+        # Two minutes later it is gone; it never works again in that session
+        self.assertNotIn("s1:main", instances(m.snapshot(T0 + dt.timedelta(seconds=200))))
+
+    def test_silent_open_session_leaves_and_comes_back(self):
+        events = [main(0, "SessionStart"), main(1, "UserPromptSubmit", summary={"origin": "user"}), main(5, "Stop")]
+        m = model(events)
+        p = instances(m.snapshot(T0 + dt.timedelta(minutes=30)))["s1:main"]
+        self.assertFalse(p["closed"])
+        # An hour without events: off the floor
+        self.assertNotIn("s1:main", instances(m.snapshot(T0 + dt.timedelta(minutes=70))))
+        # The next event brings it back
+        m = model(events + [main(70 * 60, "UserPromptSubmit", summary={"origin": "user"})])
+        self.assertIn("s1:main", instances(m.snapshot(T0 + dt.timedelta(minutes=70, seconds=5))))
+
+    def test_a_wait_for_the_owner_never_leaves(self):
+        events = [main(0, "SessionStart"),
+                  main(1, "PreToolUse", tool_name="Bash", tool_use_id="b", summary={"command": "ls"}),
+                  main(2, "PermissionRequest", tool_name="Bash", tool_use_id="b", summary={"command": "ls"})]
+        p = instances(model(events).snapshot(T0 + dt.timedelta(hours=3)))["s1:main"]
+        self.assertEqual(p["state"], "waiting")
+
     def test_objects_mailbox_checks_memory_skills(self):
         events = [main(0, "SessionStart"),
                   main(1, "PreToolUse", tool_name="Bash", tool_use_id="n", summary={"script": "notificar.py", "channel": "radar"}),

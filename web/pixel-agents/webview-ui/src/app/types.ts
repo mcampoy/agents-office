@@ -19,6 +19,8 @@ export interface Instance {
   type: string;
   main: boolean;
   general: boolean;
+  /** Its session closed (SessionEnd): it walks to the exit and the server removes it shortly after. */
+  closed?: boolean;
   number: number;
   label: string | null;
   history_label: string;
