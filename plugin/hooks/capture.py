@@ -402,6 +402,114 @@ def process(payload):
                 json.dumps(record(payload), ensure_ascii=False) + "\n")
     if payload.get("hook_event_name") == "SessionStart":
         prune(folder, today)
+    try:
+        announce(payload)
+    except Exception as error:
+        log_error("notice", error)
+
+
+# --- Windows notices -------------------------------------------------------------
+#
+# Two moments the owner hears about even with the office closed: the main session ended its turn (review or
+# assign another task) and someone waits for them (a permission or an answer). Each with its own sound. Off
+# unless <data>/notifications.json says {"windows": true} (the installer writes it). The text never carries
+# prompts, messages or commands: only the project, the kind and the tool name.
+
+WAIT_NOTIFICATIONS = {"permission_prompt", "agent_needs_input"}
+# Claude Code sends PermissionRequest and Notification(permission_prompt) for the same dialog
+SAME_WAIT_S = 15
+SOUNDS = {"done": "ms-winsoundevent:Notification.Default", "waiting": "ms-winsoundevent:Notification.Reminder"}
+POWERSHELL_APP_ID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+
+
+def notices_enabled():
+    try:
+        with open(os.path.join(DATA, "notifications.json"), encoding="utf-8") as f:
+            return json.load(f).get("windows") is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def notice_for(payload):
+    """The notice for this event, or None."""
+    event = payload.get("hook_event_name")
+    if event == "Stop" and not payload.get("agent_id"):
+        return {"kind": "done"}
+    if event == "PermissionRequest":
+        return {"kind": "waiting", "tool": short(payload.get("tool_name"), 60)}
+    if event == "Notification" and payload.get("notification_type") in WAIT_NOTIFICATIONS:
+        return {"kind": "waiting", "answer": payload.get("notification_type") == "agent_needs_input"}
+    return None
+
+
+def announce(payload):
+    notice = notice_for(payload)
+    if not notice or not notices_enabled():
+        return
+    session = str(payload.get("session_id") or "")
+    state_path = os.path.join(DATA, "notices.json")
+    try:
+        with open(state_path, encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        state = {}
+    moment = time.time()
+    last = state.get(session) or {}
+    if notice["kind"] == "waiting" and last.get("kind") == "waiting" and moment - last.get("ts", 0) < SAME_WAIT_S:
+        return
+    state = {k: v for k, v in state.items() if moment - v.get("ts", 0) < 86400}
+    state[session] = {"kind": notice["kind"], "ts": moment}
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    notice = clean({**notice, "project": load_config().get("id"), "subagent": bool(payload.get("agent_id")) or None})
+    test_log = os.environ.get("AGENTS_OFFICE_NOTICE_LOG")
+    if test_log:
+        with open(test_log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(notice) + "\n")
+        return
+    show_toast(notice)
+
+
+def toast_text(notice):
+    who = "Un subagente" if notice.get("subagent") else "La sesión principal"
+    if notice["kind"] == "done":
+        return "Terminó el turno", "Revisá el resultado o asigná otra tarea."
+    if notice.get("answer"):
+        return "Espera tu respuesta", f"{who} necesita que le contestes."
+    tool = notice.get("tool")
+    return "Espera tu aprobación", f"{who} pide permiso" + (f" para {tool}." if tool else ".")
+
+
+def show_toast(notice):
+    """A Windows notification through Windows PowerShell (its WinRT bridge), detached: the hook does not wait."""
+    if os.name != "nt":
+        return
+    from xml.sax.saxutils import escape
+    title, body = toast_text(notice)
+    project = notice.get("project") or "oficina"
+    long = ' duration="long"' if notice["kind"] == "waiting" else ""
+    xml = (f'<toast{long}><visual><binding template="ToastGeneric">'
+           f'<text>{escape(title)}</text><text>{escape(body)}</text><text placement="attribution">{escape(project)}</text>'
+           f'</binding></visual><audio src="{SOUNDS[notice["kind"]]}"/></toast>')
+    script = (
+        "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;"
+        "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null;"
+        "$x = New-Object Windows.Data.Xml.Dom.XmlDocument;"
+        f"$x.LoadXml('{xml.replace(chr(39), chr(39) * 2)}');"
+        f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{POWERSHELL_APP_ID}')"
+        ".Show([Windows.UI.Notifications.ToastNotification]::new($x))"
+    )
+    import base64
+    import subprocess
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    # Waits for it: the hook is async (Claude Code does not wait for it), and a detached child could be cut off
+    # when the hook ends before showing anything. A failure goes to errors.log instead of vanishing.
+    r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                        "-EncodedCommand", encoded], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=20)
+    errors = [l for l in r.stderr.decode("utf-8", "replace").splitlines() if l.strip() and not l.startswith(("#< CLIXML", "<Objs"))]
+    if r.returncode != 0 or errors:
+        raise RuntimeError(f"toast: exit {r.returncode} {' '.join(errors)[:300]}")
 
 
 def main():

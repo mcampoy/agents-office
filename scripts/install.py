@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO))
 from server.offices import read_projects  # noqa: E402
 from server.profile import data_folder  # noqa: E402
 from server.registry import write_hook_config  # noqa: E402
+import notify  # noqa: E402  (scripts/notify.py, next to this file)
 
 PLUGIN = "oficina@agents-office"
 
@@ -220,6 +221,7 @@ def main():
     print(f"python: {python}")
     print(f"hooks: {generate_hooks(python, data)}")
     print(f"config: {write_config(python, data)}")
+    print(f"avisos de Windows: {'activados' if notify.enable_by_default(data) else 'desactivados'} (scripts/notify.py)")
     for skill in generate_skills(python):
         print(f"skill: {skill}")
     if "--statusline" in sys.argv:
