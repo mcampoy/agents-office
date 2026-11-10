@@ -502,10 +502,14 @@ def show_toast(notice):
     import base64
     import subprocess
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                      "-EncodedCommand", encoded], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, creationflags=flags, close_fds=True)
+    # Waits for it: the hook is async (Claude Code does not wait for it), and a detached child could be cut off
+    # when the hook ends before showing anything. A failure goes to errors.log instead of vanishing.
+    r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                        "-EncodedCommand", encoded], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=20)
+    errors = [l for l in r.stderr.decode("utf-8", "replace").splitlines() if l.strip() and not l.startswith(("#< CLIXML", "<Objs"))]
+    if r.returncode != 0 or errors:
+        raise RuntimeError(f"toast: exit {r.returncode} {' '.join(errors)[:300]}")
 
 
 def main():
