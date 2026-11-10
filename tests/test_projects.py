@@ -65,6 +65,11 @@ class SeveralProjects(unittest.TestCase):
         self.assertFalse((self.a / "CLAUDE.md").exists())  # without --claude-md it is not touched
         zones = json.loads((self.data / "profiles" / "project-a" / "zones.json").read_text(encoding="utf-8"))
         self.assertIn({"agent": "lente-*", "zone": "reading"}, zones["rules"])
+        # Built-in subagents go to the room of what they do, after the project's own rules
+        self.assertIn({"agent": "Explore", "zone": "exploration"}, zones["rules"])
+        self.assertIn({"agent": "general-purpose", "zone": "base"}, zones["rules"])
+        agents = [r["agent"] for r in zones["rules"]]
+        self.assertLess(agents.index("lente-*"), agents.index("Explore"))
         self.hook(self.a, "SessionStart")
         self.hook(self.b, "SessionStart")
         self.hook(self.b, "UserPromptSubmit")

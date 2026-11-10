@@ -116,9 +116,9 @@ class Office:
 
     # --- Snapshot -------------------------------------------------------------------------
 
-    def _zone(self, type_):
+    def _zone(self, type_, general=False):
         return zone_of(type_, self.zones.get("rules", []), self.zones.get("generic", []),
-                       self.zones.get("generic_zone", "floating"), self.zones.get("unzoned_zone", "reception"))
+                       self.zones.get("generic_zone", "floating"), self.zones.get("unzoned_zone", "reception"), general)
 
     def build(self, now):
         agents = self.catalog.frontmatters()
@@ -136,9 +136,7 @@ class Office:
         self.refresh_named(model.writes)
         snap = model.snapshot(now)
         for inst in snap["instances"]:
-            zone, unzoned = self._zone(inst["type"])
-            if inst["general"]:
-                zone, unzoned = self.zones.get("generic_zone", "floating"), False
+            zone, unzoned = self._zone(inst["type"], inst["general"])
             inst["zone"], inst["unzoned"] = zone, unzoned
             inst["role"] = (agents.get(inst["type"]) or {}).get("description")
         tasks = self.entries("tasks")
