@@ -41,7 +41,8 @@ interface Visit {
 
 const BUSY = (state: string) => state !== 'idle' && state !== 'done';
 /** Not working and not on the way out: rests in the café (the lounge) until it works again. */
-const RESTING = (i: Instance) => i.state === 'idle' || (i.state === 'done' && !(i.general && !i.main));
+const RESTING = (i: Instance) =>
+  !i.closed && (i.state === 'idle' || (i.state === 'done' && !(i.general && !i.main)));
 
 interface Token {
   id: number;
@@ -356,7 +357,8 @@ export class FloorController {
         const p = this.mainOf(i.session);
         this.walkTo(t.id, p ? this.nextTo(p.id) : null);
       } else {
-        // A general agent that finished: heads to the reception (the exit) until the server removes it
+        // A general agent that finished, or anyone whose session closed: heads to the reception (the exit) until
+        // the server removes it
         this.walkTo(t.id, this.freeTile(RECEPTION));
       }
     }
