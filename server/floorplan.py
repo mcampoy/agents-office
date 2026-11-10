@@ -215,8 +215,8 @@ def build(desks):
     p.item("SOFA_BACK", 5, 14)
     p.item("COFFEE", 6, 13)
     p.item("DOUBLE_BOOKSHELF", 8, 9)
-    p.item("PLANT", 1, 13)
-    p.item("POT", CAFE_W - 1, 14)
+    p.item("PLANT", CAFE_W - 1, 13)
+    p.item("POT", CAFE_W, 14)
     # Reception: benches for agents without a room, near the exit
     for k in range(RECEPTION_W - 3):
         p.item("WOODEN_BENCH", reception_c0 + 1 + k, 12)
