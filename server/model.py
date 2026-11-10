@@ -25,7 +25,8 @@ THRESHOLDS = {
     "idle_s": 300,             # N minutes without events with the session open
     "error_s": 120,            # how long the error bubble lasts
     "general_retire_s": 120,   # a general agent leaves the floor this long after finishing
-    "inactive_session_s": 6 * 3600,
+    "closed_retire_s": 120,    # a closed session (SessionEnd) leaves the floor this long after closing
+    "silent_retire_s": 3600,   # an open session without events this long leaves too, until its next event
 }
 
 
@@ -432,9 +433,17 @@ class Model:
         instances = []
         for inst in self.instances.values():
             session = self.sessions.get(inst.session, {})
-            if session.get("end") and (now - session["end"]).total_seconds() > t["inactive_session_s"]:
+            closed = bool(session.get("end"))
+            # A closed session never works again: it walks to the exit and leaves
+            if closed and (now - session["end"]).total_seconds() > t["closed_retire_s"]:
                 continue
             state, since = self.state_of(inst, now)
+            # An open one that went silent (a forgotten terminal) leaves the floor; its next event brings it back.
+            # Never while it waits for the owner: that wait is for them
+            last = session.get("last_event")
+            if (not closed and last and (now - last).total_seconds() > t["silent_retire_s"]
+                    and state not in ("waiting", "error")):
+                continue
             general = not inst.is_main and self._is_generic(inst.type)
             if general and inst.end and (now - inst.end).total_seconds() > t["general_retire_s"]:
                 continue
@@ -447,6 +456,7 @@ class Model:
                 "type": inst.type,
                 "main": inst.is_main,
                 "general": general,
+                "closed": closed,
                 "number": inst.number,
                 "label": (launch or {}).get("description"),
                 "history_label": self.history_label(inst.key),
