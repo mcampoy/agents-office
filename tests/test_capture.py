@@ -388,5 +388,63 @@ class Robustness(Base):
         self.assertFalse((events / "2020-01-01.jsonl").exists())
 
 
+class Notices(Base):
+    """Windows notices: the main session's turn end and the waits for the owner. The test seam
+    AGENTS_OFFICE_NOTICE_LOG writes them to a file instead of showing them."""
+
+    def setUp(self):
+        super().setUp()
+        self.log = Path(self.tmp.name) / "notices.log"
+
+    def enable(self, on=True):
+        (self.data / "notifications.json").write_text(json.dumps({"windows": on}), encoding="utf-8")
+
+    def hook(self, name, **fields):
+        self.run_hook(self.event(name, **fields), environment={"AGENTS_OFFICE_NOTICE_LOG": str(self.log)})
+
+    def notices(self):
+        if not self.log.exists():
+            return []
+        return [json.loads(l) for l in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def test_off_unless_enabled(self):
+        self.hook("Stop")
+        self.assertEqual(self.notices(), [])
+        self.enable(False)
+        self.hook("Stop")
+        self.assertEqual(self.notices(), [])
+
+    def test_turn_end_of_the_main_session(self):
+        self.enable()
+        self.hook("Stop", last_assistant_message=SECRET)
+        [n] = self.notices()
+        self.assertEqual((n["kind"], n["project"]), ("done", "example"))
+        self.assertNotIn(SECRET, json.dumps(n))
+
+    def test_subagent_turn_end_is_not_announced(self):
+        self.enable()
+        self.hook("SubagentStop", agent_id="a1", agent_type="lector")
+        self.hook("Stop", agent_id="a1", agent_type="lector")
+        self.assertEqual(self.notices(), [])
+
+    def test_wait_once_per_request(self):
+        self.enable()
+        # Claude Code sends both events for the same permission dialog: one notice
+        self.hook("PermissionRequest", tool_name="Bash", tool_use_id="t", tool_input={"command": SECRET})
+        self.hook("Notification", notification_type="permission_prompt", message=SECRET)
+        [n] = self.notices()
+        self.assertEqual((n["kind"], n["tool"]), ("waiting", "Bash"))
+        self.assertNotIn(SECRET, json.dumps(n))
+        # After the turn moves on, a new wait is announced again
+        self.hook("Stop")
+        self.hook("Notification", notification_type="agent_needs_input")
+        self.assertEqual([n["kind"] for n in self.notices()], ["waiting", "done", "waiting"])
+
+    def test_idle_reminder_is_not_a_wait(self):
+        self.enable()
+        self.hook("Notification", notification_type="idle_prompt")
+        self.assertEqual(self.notices(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

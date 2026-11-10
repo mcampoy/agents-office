@@ -85,6 +85,18 @@ En la compu, el botón **Celular** de la cabecera muestra esa dirección; `py -3
 - `--new-key` cambia la clave (los celulares vuelven a pedirla) y `--disable` lo apaga.
 - Si el celular no llega: la red Wi-Fi tiene que figurar como privada en Windows y el puerto tiene que estar permitido. En una PowerShell de administrador: `New-NetFirewallRule -DisplayName "agents-office" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow -Profile Private`. Algunas redes corporativas aíslan los dispositivos entre sí; ahí no hay forma de llegar.
 
+## Avisos
+
+La oficina avisa en dos momentos, cada uno con su sonido:
+- **Terminó el turno** de la sesión principal: es momento de revisar o de asignar otra tarea.
+- **Espera algo tuyo:** un permiso o una respuesta, de la sesión principal o de un subagente. Este aviso queda más tiempo en pantalla.
+
+En la compu los muestra Windows, aunque la oficina esté cerrada. El instalador los deja activados; `py -3 scripts/notify.py --disable` los apaga, `--enable` los vuelve a prender y `--test` muestra los dos de ejemplo. Si no aparecen, revisá *Configuración > Sistema > Notificaciones* y que no esté activo *No molestar*.
+
+En el celular, el botón 🔕 de la cabecera activa los avisos con sonido y vibración (el navegador pide un toque antes de dejar sonar a una página). Solo suenan **con la oficina abierta y a la vista**: por http, el celular no permite notificaciones del sistema. En la compu ese botón no aparece, para no repetir los avisos de Windows.
+
+Los avisos nunca llevan el texto de prompts, mensajes ni comandos: solo el proyecto, el tipo de aviso y el nombre de la herramienta.
+
 ## Datos
 
 | Qué | Dónde |
@@ -94,6 +106,7 @@ En la compu, el botón **Celular** de la cabecera muestra esa dirección; `py -3
 | Config del hook (la genera el instalador) | `<datos>/config.json` |
 | Salida del servidor | `<datos>/server.log` |
 | Acceso desde el celular (clave) | `<datos>/lan.json` |
+| Avisos de Windows (activados o no) y el último aviso de cada sesión | `<datos>/notifications.json`, `<datos>/notices.json` |
 | Proyectos registrados | `<datos>/projects.json` |
 | Perfiles generados por `/oficina:configurar` | `<datos>/profiles/<id>/` |
 | Última foto de la statusline de cada sesión (se borra a los 7 días) | `<datos>/statusline/` |

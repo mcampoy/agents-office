@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { OfficeState } from '../office/engine/officeState.js';
+import { isRemote, useAlerts } from './alerts.ts';
 import { api, currentProject, goToProject, type ProjectListing } from './api.ts';
 import type { Connection, Resources } from './data.ts';
 import { useSnapshot } from './data.ts';
@@ -71,7 +72,25 @@ function useView(): [View, (v: View) => void] {
   return [view, go];
 }
 
-function MobileHeader({ snapshot, connection, projects }: { snapshot: Snapshot | null; connection: Connection; projects: ProjectListing[] }) {
+type Alerts = { on: boolean; toggle: () => void };
+
+/** Sound alerts switch: only away from this computer (there, Windows notifies). */
+function AlertsSwitch({ alerts }: { alerts: Alerts }) {
+  if (!isRemote()) return null;
+  return (
+    <button
+      className={`ao-alerts ${alerts.on ? 'ao-alerts-on' : ''}`}
+      onClick={alerts.toggle}
+      aria-pressed={alerts.on}
+      title={alerts.on ? 'Avisos con sonido activados: tocá para apagarlos' : 'Activar avisos con sonido (fin de turno y esperas)'}
+    >
+      {alerts.on ? '🔔' : '🔕'}
+      <span className="ao-sr">{alerts.on ? 'Avisos activados' : 'Avisos desactivados'}</span>
+    </button>
+  );
+}
+
+function MobileHeader({ snapshot, connection, projects, alerts }: { snapshot: Snapshot | null; connection: Connection; projects: ProjectListing[]; alerts: Alerts }) {
   const p = snapshot?.main ?? null;
   const counts = count(snapshot);
   const notice = restartNotice(p?.restart_notice);
@@ -97,6 +116,7 @@ function MobileHeader({ snapshot, connection, projects }: { snapshot: Snapshot |
         <span className={`ao-connection ${connection === 'en vivo' ? 'ao-muted' : 'ao-notice'}`} title={connection}>
           ●
         </span>
+        <AlertsSwitch alerts={alerts} />
       </div>
       {snapshot?.statusline && (
         <div className="ao-row">
@@ -205,7 +225,7 @@ function ProjectSelector({ projects }: { projects: ProjectListing[] }) {
   );
 }
 
-function Header({ snapshot, connection, projects }: { snapshot: Snapshot | null; connection: Connection; projects: ProjectListing[] }) {
+function Header({ snapshot, connection, projects, alerts }: { snapshot: Snapshot | null; connection: Connection; projects: ProjectListing[]; alerts: Alerts }) {
   const p = snapshot?.main ?? null;
   const counts = count(snapshot);
   const notice = restartNotice(p?.restart_notice);
@@ -241,6 +261,7 @@ function Header({ snapshot, connection, projects }: { snapshot: Snapshot | null;
           </span>
         )}
         <span className={connection === 'en vivo' ? 'ao-muted' : 'ao-notice'}>● {connection}</span>
+        <AlertsSwitch alerts={alerts} />
         <PhoneAccess />
       </div>
       {snapshot?.statusline?.line && (
@@ -302,6 +323,7 @@ function Cards({
 
 export function Office({ resources }: { resources: Resources }) {
   const { snapshot, connection } = useSnapshot();
+  const alerts = useAlerts(snapshot);
   const [selection, setSelection] = useState<string | null>(null);
   const mobile = useIsMobile();
   const [view, goTo] = useView();
@@ -323,7 +345,7 @@ export function Office({ resources }: { resources: Resources }) {
   if (mobile) {
     return (
       <div className="ao-screen-mobile">
-        <MobileHeader snapshot={snapshot} connection={connection} projects={resources.projects} />
+        <MobileHeader snapshot={snapshot} connection={connection} projects={resources.projects} alerts={alerts} />
         <main className="ao-view">
           {view === 'floor' && (
             <>
@@ -349,7 +371,7 @@ export function Office({ resources }: { resources: Resources }) {
 
   return (
     <div className="ao-screen">
-      <Header snapshot={snapshot} connection={connection} projects={resources.projects} />
+      <Header snapshot={snapshot} connection={connection} projects={resources.projects} alerts={alerts} />
       <main className="ao-center">
         <section className="ao-floor">
           <Floor os={os} controller={controller} snapshot={snapshot} furniture={resources.furniture} selection={selection} onSelect={setSelection} onOpenBoard={openBoard} />
