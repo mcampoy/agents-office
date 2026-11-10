@@ -14,9 +14,12 @@ Salida en `web/pixel-agents/.build/` (no se versiona):
 | `assets/characters/char_0..5.png` | Los seis sprites base de Pixel Agents, sin cambios |
 | `assets/characters/char_6..23.png` | Variantes de ropa: tres por sprite base |
 | `assets/characters/char_24.png` | Avatar del responsable |
-| `assets/cast.json` | Índice de cada hoja, cuál es el avatar y cuáles se asignan a agentes |
+| `assets/characters/char_25.png` | Orquestador: el cangrejo de Claude |
+| `assets/cast.json` | Índice de cada hoja, cuál es el avatar, cuál el orquestador y cuáles se asignan a agentes |
 | `avatar-preview.png` | `char_4` y el avatar, ampliados ×6, para revisar |
 | `variants-preview.png` | Todas las hojas ampliadas ×2 |
+| `orchestrator-preview.png` | Un personaje base y el cangrejo, ampliados ×6 |
+| `orchestrator-preview.png` | Un personaje base y el cangrejo, ampliados ×6 |
 
 Formato de cada hoja (el de upstream): 112×96, cuadros de 16×32, 7 por fila (caminar ×3, tipear ×2, leer ×2) y 3 filas (abajo, arriba, derecha). La izquierda la espeja el renderer.
 
@@ -49,6 +52,16 @@ node tools/zoom.mjs .build/assets/characters/char_24.png output.png 0,0 3,0 0,2
 ```
 
 Cada par es `cuadro,fila`: fila 0 es abajo, 1 arriba y 2 derecha.
+
+## Orquestador: el cangrejo de Claude
+
+El main de la sesión actual es el **orquestador**: el agente al que el responsable le habla y que arma y reparte el trabajo. En el piso es siempre el cangrejo de Claude (`char_25`), sin importar su tipo (`main`, `partner`, etc.).
+
+- **Hoja:** se dibuja desde cero en `orchestrator()` de `sprites.mjs`. Tiene cuerpo naranja de 12×9, bracitos a los costados, cuatro patas y dos ojos (uno de perfil, ninguno de espaldas). Al caminar alterna las patas de a pares, al tipear sube y baja los bracitos, y al leer sostiene una hoja. `CRAB_TOP` fija la fila de arriba del cuerpo en cada vista y pose. `npm run sprites` deja `orchestrator-preview.png` (un personaje base y el cangrejo, ×6) para revisarlo.
+- **Tamaño:** se dibuja a 1,5× (`ORCHESTRATOR_SCALE` en `floorController.ts`), redondeado a un número entero de píxeles de pantalla. El cuadro mide 16 px de ancho y el cangrejo con los bracitos ya lo ocupa entero, así que solo se puede agrandar al dibujarlo.
+- **Sesión actual:** es la que recibió el último pedido del responsable (`server/office.py`). Una sesión sin pedidos cuenta desde que arrancó. Así, dos terminales que trabajan a la vez no se pasan el cangrejo a cada evento.
+- **Coordinación es solo del orquestador.** Los mains de otras sesiones del mismo proyecto conservan su figura y trabajan en el coworking. Si la sesión actual cambia, el cangrejo pasa al main nuevo, que va a Coordinación, y el anterior recupera su figura y se muda al coworking.
+- `cast.json` lo expone como `orchestrator` y lo deja fuera de `assignable`.
 
 ## Asignación a agentes
 

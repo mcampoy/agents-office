@@ -482,6 +482,33 @@ class CatalogAndOffice(FakeArea):
         self.assertEqual(o.snapshot["owner"]["tasks"], 1)
 
 
+    def test_current_session_is_the_last_one_the_owner_talked_to(self):
+        """The orchestrator is the main agent the owner talks to: two sessions working at once must not alternate
+        by whichever wrote an event last."""
+        data = Path(self.tmp.name) / "data"
+        (data / "events").mkdir(parents=True)
+        now = dt.datetime.now().astimezone()
+        cwd = str(self.root / "equipo")
+
+        def line(minutes_ago, event, session, **fields):
+            ts = (now - dt.timedelta(minutes=minutes_ago)).isoformat(timespec="milliseconds")
+            return json.dumps({"ts": ts, "event": event, "session_id": session, "agent_type": "partner", "cwd": cwd,
+                               **fields})
+
+        events = [
+            line(5, "UserPromptSubmit", "s1", prompt="primero"),
+            line(3, "UserPromptSubmit", "s2", prompt="segundo"),
+            line(2, "PreToolUse", "s2", tool_name="Read", tool_use_id="t2"),
+            # s1 keeps working after the owner talked to s2
+            line(1, "PreToolUse", "s1", tool_name="Read", tool_use_id="t1"),
+        ]
+        (data / "events" / f"{now.date().isoformat()}.jsonl").write_text("\n".join(events) + "\n", encoding="utf-8")
+        o = self.office(data)
+        o.update(force=True)
+        self.assertEqual(o.snapshot["current_session"]["id"], "s2")
+        self.assertEqual(o.snapshot["main"]["session"], "s2")
+
+
 class IncrementalReading(unittest.TestCase):
     def test_half_written_line_and_garbage(self):
         with tempfile.TemporaryDirectory() as tmp:

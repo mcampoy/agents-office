@@ -142,7 +142,11 @@ class Office:
         tasks = self.entries("tasks")
         flows = self.flows.build(snap, model.writes, model.drive_operations, tasks, self.known(), model.labels())
         open_sessions = [s for s in snap["sessions"] if not s["end"]]
-        current = (sorted([s for s in open_sessions if s["origin"] != SCHEDULED_ORIGIN], key=lambda s: s["last_event"])
+        # The current session is the one the owner talked to last (its main agent is the orchestrator); not the one
+        # with the newest event, which alternates when two sessions work at once. One without prompts counts from
+        # its start (a terminal just opened)
+        current = (sorted([s for s in open_sessions if s["origin"] != SCHEDULED_ORIGIN],
+                          key=lambda s: s["last_user_prompt"] or s["start"] or s["last_event"])
                    or sorted(snap["sessions"], key=lambda s: s["last_event"]) or [None])[-1]
         main = next((i for i in snap["instances"] if current and i["main"] and i["session"] == current["id"]), None)
         notices = self.catalog.restart_notices(open_sessions)

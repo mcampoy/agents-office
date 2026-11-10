@@ -107,6 +107,8 @@ export interface Statusline {
 
 export interface Characters {
   avatar: number;
+  /** Sheet of the orchestrator: the current session's main agent, the one the owner talks to. */
+  orchestrator: number;
   assignable: number[];
 }
 
