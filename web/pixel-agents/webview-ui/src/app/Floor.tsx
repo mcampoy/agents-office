@@ -211,6 +211,9 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
       );
     }
 
+    // Those resting in the café share one sign (their tags on neighboring armchairs would pile up); the
+    // selected one still shows its own
+    if (controller.resting(id) && !selected) return null;
     const color = STATE_COLOR[inst.state];
     let bubble: SpriteData | null = null;
     if (inst.state === 'waiting') bubble = WAIT_BUBBLE;
@@ -369,6 +372,18 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
         );
       }
     }
+    // The café's sign: how many rest there (their own tags are hidden, see label())
+    const cafe = controller.rectangle(LOUNGE);
+    const resting = controller.visibleTokens().filter((t) => controller.resting(t.id)).length;
+    if (cafe && resting > 0) {
+      objects.push(
+        <div key="cafe" className="absolute pointer-events-auto" style={{ ...atTile(cafe.c1 - 2.6, cafe.r0 + 0.15), zIndex: 31 }} title="Agentes que no están trabajando: turno terminado u ociosos. El detalle está en las tarjetas.">
+          <div className="ao-object ao-small">
+            <span>☕ {resting} en pausa</span>
+          </div>
+        </div>,
+      );
+    }
     // The project's fixed boards, on the wall of the owner's office: tasks and audits
     const office = controller.rectangle(OWNER);
     if (office && snapshot.boards) {
@@ -510,7 +525,7 @@ export function Floor({ os, controller, snapshot, furniture, selection, onSelect
       {!editing && (
         <div className="absolute inset-0 pointer-events-none">
           {!compact && rooms}
-          {compact ? objects.filter((o) => /^(mailbox|archive|lights|boards)/.test(String((o as { key?: string }).key))) : objects}
+          {compact ? objects.filter((o) => /^(mailbox|archive|lights|boards|cafe)/.test(String((o as { key?: string }).key))) : objects}
           {controller.visibleTokens().map(({ id, inst }) => label(id, inst))}
           {label(AVATAR_ID, null)}
         </div>

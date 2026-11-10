@@ -504,6 +504,12 @@ export class FloorController {
     return c1 < 0 ? null : { c0, r0, c1, r1 };
   }
 
+  /** Resting in the café (turn ended or idle): the floor shows one sign for all of them instead of each tag. */
+  resting(id: number): boolean {
+    const t = this.byId.get(id);
+    return !!t && t.mode === 'sofa' && !this.visits.has(id);
+  }
+
   visibleTokens(): Array<{ id: number; inst: Instance }> {
     return [...this.tokens.values()].map((t) => ({ id: t.id, inst: t.inst }));
   }
