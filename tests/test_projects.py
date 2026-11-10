@@ -95,6 +95,26 @@ class SeveralProjects(unittest.TestCase):
         self.hook(self.a, "SessionStart")
         self.assertFalse((self.data / "events").exists())
 
+    def test_plan_made_to_measure_and_relayout(self):
+        self.configure(self.a, "--apply")
+        profile = self.data / "profiles" / "project-a"
+        layout = json.loads((profile / "layout.json").read_text(encoding="utf-8"))
+        rooms = {a["label"] for a in layout["areas"]}
+        self.assertNotIn("communication", rooms)  # no agent of the project goes there
+        self.assertIn("reading", rooms)
+        self.assertLess(layout["cols"], 48)
+        # The team grows: four researchers in exploration. configure says the plan no longer fits...
+        zones = json.loads((profile / "zones.json").read_text(encoding="utf-8"))
+        for k in range(1, 5):
+            zones["rules"].insert(2, {"agent": f"investigador-{k}", "zone": "exploration"})
+        (profile / "zones.json").write_text(json.dumps(zones), encoding="utf-8")
+        self.assertIn("quedó chico para: exploration", self.configure(self.a))
+        # ...and --relayout regenerates it, keeping the previous one
+        output = self.configure(self.a, "--apply", "--relayout")
+        self.assertIn("Plano nuevo", output)
+        self.assertEqual(json.loads((profile / "layout.json.bak").read_text(encoding="utf-8")), layout)
+        self.assertNotIn("quedó chico", self.configure(self.a))
+
 
 if __name__ == "__main__":
     unittest.main()
