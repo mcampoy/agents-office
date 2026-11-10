@@ -1,14 +1,16 @@
 """Registers a project in the office (what /oficina:configurar does).
 
 Usage:
-    py -3 scripts/configure.py [FOLDER] [--profile FOLDER] [--id ID] [--data FOLDER] [--apply] [--claude-md] [--remove]
+    py -3 scripts/configure.py [FOLDER] [--profile FOLDER] [--id ID] [--data FOLDER] [--apply] [--claude-md]
+                               [--relayout] [--remove]
 
 Without --apply it only shows the plan: it writes nothing. With --apply:
 1. If --profile is not given, builds one in <data>/profiles/<id>/:
    - profile.json with the project as the area (allowlist: the whole project, except build folders);
    - zones.json from the agents in .claude/agents (lente-* to reading, verifier to verification,
      researchers to exploration, the rest to the base room);
-   - the example layout and an empty sprites.json.
+   - a floor plan made to measure (server/floorplan.py): only the rooms the project can use, each with the
+     desks its agents need plus one, and an empty sprites.json.
    With --profile (an existing profile, like equipo-idi's) it uses that one and does not touch the project.
 2. Boards: looks for pendientes.md and fricciones.md (at the root or in docs/). If missing, creates them with
    the standard format (server/boards.py).
@@ -17,6 +19,9 @@ Without --apply it only shows the plan: it writes nothing. With --apply:
 4. Registers the project in <data>/projects.json and regenerates <data>/config.json for the hook.
 
 New sessions of the project are captured from then on (the hook reads the config on every event).
+--relayout regenerates the floor plan of a generated profile from its zones.json (when the team grew or shrank):
+the previous one is kept as layout.json.bak, because it may have changes made with the floor editor. Without it,
+configure.py only says when the team no longer fits the plan.
 --remove unregisters it (does not delete the profile or the events).
 
 The output and the files it creates are read by the user, so they are Spanish.
@@ -29,7 +34,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
-from server import boards, registry  # noqa: E402
+from server import boards, floorplan, registry  # noqa: E402
 from server.offices import read_projects  # noqa: E402
 from server.profile import EXAMPLE, Profile, data_folder  # noqa: E402
 from server.util import frontmatter  # noqa: E402
@@ -170,9 +175,49 @@ def create_profile(folder, p):
     if not (target / "zones.json").exists():
         (target / "zones.json").write_text(json.dumps(zones, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if not (target / "layout.json").exists():
-        shutil.copyfile(EXAMPLE / "layout.json", target / "layout.json")
+        write_layout(target)
     if not (target / "sprites.json").exists():
         (target / "sprites.json").write_text('{\n  "agents": {}\n}\n', encoding="utf-8")
+
+
+def needed_desks(target):
+    """Desks per room for a generated profile, from its zones.json (the project's rules plus the generic ones)."""
+    zones = json.loads((Path(target) / "zones.json").read_text(encoding="utf-8"))
+    own = [r for r in zones.get("rules", []) if r not in GENERIC_RULES]
+    generic = [r for r in zones.get("rules", []) if r in GENERIC_RULES]
+    return floorplan.desks_needed(own, generic)
+
+
+def write_layout(target):
+    layout = floorplan.build(needed_desks(target))
+    (Path(target) / "layout.json").write_text(json.dumps(layout, ensure_ascii=False), encoding="utf-8")
+    return layout
+
+
+def relayout(target):
+    target = Path(target)
+    if not (target / "zones.json").exists():
+        sys.exit(f"{target} no es un perfil generado (no tiene zones.json).")
+    if (target / "layout.json").exists():
+        shutil.copyfile(target / "layout.json", target / "layout.json.bak")
+        print(f"Plano anterior guardado en {target / 'layout.json.bak'}")
+    layout = write_layout(target)
+    rooms = sorted({a["label"] for a in layout["areas"]})
+    print(f"Plano nuevo: {layout['cols']}×{layout['rows']} baldosas, salas: {', '.join(rooms)}")
+
+
+def fit_notice(target):
+    """For an existing generated profile: the rooms where the team no longer fits."""
+    target = Path(target)
+    try:
+        layout = json.loads((target / "layout.json").read_text(encoding="utf-8"))
+        short = floorplan.short_of(layout, needed_desks(target))
+    except (OSError, ValueError, KeyError):
+        return None
+    if short:
+        return (f"El plano quedó chico para: {', '.join(short)}. Para regenerarlo: --relayout "
+                "(guarda el anterior en layout.json.bak).")
+    return None
 
 
 def main():
@@ -184,6 +229,7 @@ def main():
     a.add_argument("--data")
     a.add_argument("--apply", action="store_true")
     a.add_argument("--claude-md", action="store_true")
+    a.add_argument("--relayout", action="store_true")
     a.add_argument("--remove", action="store_true")
     args = a.parse_args()
     folder = Path(args.folder).resolve()
@@ -200,6 +246,16 @@ def main():
     print(f"Proyecto: {folder} (id: {ident})")
     for line in p["actions"]:
         print(line)
+    existing = not args.profile and (Path(p["profile"]) / "zones.json").exists()
+    if args.relayout and not existing:
+        sys.exit("--relayout es para un perfil ya generado; un perfil hecho a mano (--profile) tiene su propio plano.")
+    if args.relayout:
+        if not args.apply:
+            print(f"\nCon --apply se regenera el plano de {p['profile']} (el anterior queda en layout.json.bak).")
+        else:
+            relayout(p["profile"])
+    elif existing and fit_notice(p["profile"]):
+        print(f"\n{fit_notice(p['profile'])}")
     if p["claude_md"] and not p["claude_md"]["present"]:
         print(f"\nCon --claude-md se agrega a {p['claude_md']['path']}:\n\n{p['claude_md']['block']}")
     elif p["claude_md"]:
