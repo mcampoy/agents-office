@@ -60,6 +60,18 @@ def find(folder, names):
     return None
 
 
+# Claude Code's built-in subagents, each in the room of what it does (after the project's own rules, which win).
+# Coordination has a single desk, the main agent's: Plan goes to the reading room's meeting table
+GENERIC_RULES = [
+    {"agent": "Explore", "zone": "exploration"},
+    {"agent": "codebase-memory*", "zone": "exploration"},
+    {"agent": "Plan", "zone": "reading"},
+    {"agent": "claude-code-guide", "zone": "reading"},
+    {"agent": "*review*", "zone": "verification"},
+    {"agent": "general-purpose", "zone": "base"},
+]
+
+
 def suggested_zone(name):
     n = name.lower()
     if "lente" in n or "lens" in n:
@@ -150,7 +162,7 @@ def create_profile(folder, p):
     zones = {
         "_comment": "Zona de cada agente. Patrones con '*'. Un agente sin regla va a la recepción.",
         "rules": [{"agent": "lente-*", "zone": "reading"}, {"agent": p["main_agent"], "zone": "coordination"}]
-                 + [z for z in p["zones"] if not z["agent"].startswith("lente-")],
+                 + [z for z in p["zones"] if not z["agent"].startswith("lente-")] + GENERIC_RULES,
         "generic": ["general-purpose", "Explore", "Plan", "claude", "claude-code-guide", "statusline-setup"],
         "generic_zone": "floating",
         "unzoned_zone": "reception",

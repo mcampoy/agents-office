@@ -488,11 +488,13 @@ class Model:
         }
 
 
-def zone_of(name, rules, generic, generic_zone="floating", unzoned_zone="reception"):
+def zone_of(name, rules, generic, generic_zone="floating", unzoned_zone="reception", general=False):
+    """Room of an agent: the first matching rule wins, also for a generic subagent (`general`, so that Explore
+    can go to exploration); without a rule a generic one goes to the generic zone and anything else is unzoned."""
     for rule in rules:
         if fnmatch.fnmatchcase(name, rule["agent"]):
             return rule["zone"], False
-    if name in generic:
+    if general or name in generic:
         return generic_zone, False
     return unzoned_zone, True
 

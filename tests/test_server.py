@@ -489,6 +489,13 @@ class Misc(unittest.TestCase):
         self.assertEqual(zone_of("Explore", zones["rules"], zones["generic"]), ("floating", False))
         self.assertEqual(zone_of("nuevo", zones["rules"], zones["generic"]), ("reception", True))
 
+    def test_generic_subagent_follows_its_rule(self):
+        rules = [{"agent": "Explore", "zone": "exploration"}]
+        # A rule wins for a generic subagent too; without one it goes to the generic zone, never to reception
+        self.assertEqual(zone_of("Explore", rules, ["Explore"], general=True), ("exploration", False))
+        self.assertEqual(zone_of("general-purpose", rules, ["general-purpose"], general=True), ("floating", False))
+        self.assertEqual(zone_of("otro-tipo", rules, [], general=True), ("floating", False))
+
     def test_next_scheduled_run(self):
         tuesday = dt.datetime(2026, 11, 3, 15, 0).astimezone()
         self.assertEqual(next_scheduled_run(tuesday).date(), dt.date(2026, 11, 4))
