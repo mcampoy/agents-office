@@ -72,21 +72,21 @@ La pantalla tiene cuatro partes:
 
 En el teléfono, el plano queda arriba, los agentes abajo y los paneles en otra vista.
 
-## Desde el celular (mismo Wi-Fi)
+## Desde el celular (misma red)
 
 Por defecto la oficina solo se ve desde la propia compu. Para abrirla desde el celular:
 
 1. Activar el acceso: `py -3 scripts/lan.py --enable`. Genera una clave y muestra la dirección para el celular.
 2. Reiniciar la oficina: `.\start-office.ps1 -Stop` y después `.\start-office.ps1`. La primera vez, Windows puede preguntar si deja que Python reciba conexiones: elegí **redes privadas**.
-3. En el celular, conectado al mismo Wi-Fi, abrir la dirección con la clave (`http://<ip-de-la-compu>:8765/?key=…`). La clave queda guardada en el celular y sale de la URL.
+3. En el celular, conectado a la misma red que la compu (da igual si la compu va por Wi-Fi o por cable), abrir la dirección con la clave (`http://<ip-de-la-compu>:8765/?key=…`). La clave queda guardada en el celular y sale de la URL.
 
 En la compu, el botón **Celular** de la cabecera muestra esa dirección; `py -3 scripts/lan.py --show` también.
 
 - Sin la clave no se ve nada, y tras 10 intentos fallidos esa dirección queda bloqueada 10 minutos.
 - Desde el celular todo es de solo lectura: el editor del piso se usa desde la compu.
-- El tráfico no va cifrado: usalo solo en un Wi-Fi de confianza (casa u oficina), nunca en uno público.
+- El tráfico no va cifrado: usalo solo en una red de confianza (casa u oficina), nunca en una pública.
 - `--new-key` cambia la clave (los celulares vuelven a pedirla) y `--disable` lo apaga.
-- Si el celular no llega: la red Wi-Fi tiene que figurar como privada en Windows y el puerto tiene que estar permitido. En una PowerShell de administrador: `New-NetFirewallRule -DisplayName "agents-office" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow -Profile Private`. Algunas redes corporativas aíslan los dispositivos entre sí; ahí no hay forma de llegar.
+- Si el celular no llega: la red de la compu (Wi-Fi o Ethernet) tiene que figurar como privada en Windows y el puerto tiene que estar permitido. En una PowerShell de administrador: `New-NetFirewallRule -DisplayName "agents-office" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow -Profile Private`. Algunas redes corporativas separan el Wi-Fi de la red por cable o aíslan los dispositivos entre sí; ahí no hay forma de llegar.
 
 ## Avisos
 

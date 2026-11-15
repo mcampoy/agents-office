@@ -104,6 +104,6 @@ if (Test-Office) {
 }
 
 # With -Port, the phone URL uses that port, not the profile's
-if ($info.lanKey) { Write-Host "Celular (mismo Wi-Fi): http://$($info.lanIp):$Port/?key=$($info.lanKey)" }
+if ($info.lanKey) { Write-Host "Celular (misma red): http://$($info.lanIp):$Port/?key=$($info.lanKey)" }
 
 if (-not $NoBrowser) { Start-Process $url }

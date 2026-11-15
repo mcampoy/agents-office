@@ -1,4 +1,4 @@
-"""Access from the local network (phone on the same Wi-Fi): key, cookie, read-only and attempt limit.
+"""Access from the local network (phone on the same network): key, cookie, read-only and attempt limit.
 
 Usage: py -3 -m unittest discover -s tests -v
 """
@@ -49,7 +49,7 @@ class Settings(unittest.TestCase):
 
 
 class Network(unittest.TestCase):
-    """The test client is 127.0.0.1, so `loopback=set()` makes the server treat it as a phone on the Wi-Fi."""
+    """The test client is 127.0.0.1, so `loopback=set()` makes the server treat it as a phone on the local network."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -162,7 +162,7 @@ class LocalComputer(Network):
 
 
 class Addresses(unittest.TestCase):
-    """The computer's IP can change while the office runs (DHCP, another Wi-Fi): the server notices."""
+    """The computer's IP can change while the office runs (DHCP, another network): the server notices."""
 
     def test_cached_and_refreshed_on_a_miss(self):
         now = [0.0]

@@ -1,4 +1,4 @@
-"""Turns on or off access to the office from the phone (same Wi-Fi). See server/lan.py.
+"""Turns on or off access to the office from the phone (same network). See server/lan.py.
 
 Usage: py -3 scripts/lan.py [--enable | --disable | --new-key | --show] [--data FOLDER]
 
@@ -54,11 +54,11 @@ def main():
     else:
         ip = lan.primary_ip()
         print(f"Estado: activado. Clave: {settings['key']}")
-        print(f"Desde el celular, conectado al mismo Wi-Fi: {lan.phone_url(ip or '<ip-de-esta-compu>', port, settings['key'])}")
-        print("Usalo solo en un Wi-Fi de confianza (casa u oficina): el tráfico no va cifrado.")
+        print(f"Desde el celular, conectado a la misma red: {lan.phone_url(ip or '<ip-de-esta-compu>', port, settings['key'])}")
+        print("Usalo solo en una red de confianza (casa u oficina): el tráfico no va cifrado.")
         print("Si el celular no llega, Windows puede estar bloqueando el puerto. En una PowerShell de administrador:")
         print(f"  {FIREWALL.format(port=port)}")
-        print("y verificá que la red Wi-Fi figure como privada (Configuración > Red e Internet).")
+        print("y verificá que la red (Wi-Fi o Ethernet) figure como privada (Configuración > Red e Internet).")
     if args.enable or args.disable or args.new_key:
         print("Reiniciá la oficina para aplicarlo: .\\start-office.ps1 -Stop y después .\\start-office.ps1")
     return 0
