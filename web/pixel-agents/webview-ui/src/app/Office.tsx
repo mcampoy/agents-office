@@ -157,7 +157,7 @@ function SessionInfo({ s, compact = false }: { s: Statusline | null; compact?: b
   );
 }
 
-/** The phone URL (with the key) if access from the Wi-Fi is enabled. The server only gives it to this computer. */
+/** The phone URL (with the key) if access from the local network is enabled. The server only gives it to this computer. */
 function usePhoneUrl(): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -169,7 +169,7 @@ function usePhoneUrl(): string | null {
   return url;
 }
 
-/** Button that shows the URL to open on the phone (same Wi-Fi). */
+/** Button that shows the URL to open on the phone (same network). */
 function PhoneAccess() {
   const url = usePhoneUrl();
   const [open, setOpen] = useState(false);
@@ -181,9 +181,9 @@ function PhoneAccess() {
       </button>
       {open && (
         <span className="ao-phone-box" role="dialog" aria-label="Abrir en el celular">
-          <span>Desde el celular, en el mismo Wi-Fi:</span>
+          <span>Desde el celular, en la misma red:</span>
           <code className="ao-phone-url">{url}</code>
-          <span className="ao-muted">Usalo solo en un Wi-Fi de confianza. La clave queda guardada en el celular.</span>
+          <span className="ao-muted">Usalo solo en una red de confianza. La clave queda guardada en el celular.</span>
         </span>
       )}
     </span>

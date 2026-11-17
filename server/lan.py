@@ -1,4 +1,4 @@
-"""Access from the local network (a phone on the same Wi-Fi).
+"""Access from the local network (a phone on the same network).
 
 Off by default: the server only listens on 127.0.0.1. `scripts/lan.py --enable` writes <data>/lan.json with a
 random key; from then on the server listens on every interface and asks network clients for that key:
@@ -10,7 +10,7 @@ random key; from then on the server listens on every interface and asks network 
 - From the network everything is read-only: POST is rejected (the floor editor is used from the computer).
 - The computer itself (loopback) works as always, without a key.
 
-The traffic is plain HTTP: use it only on a trusted Wi-Fi (home or office), never on a public one.
+The traffic is plain HTTP: use it only on a trusted network (home or office), never on a public one.
 """
 import json
 import secrets
@@ -106,12 +106,12 @@ def phone_url(ip, port, key):
 
 def startup_line(ip, port):
     """What the server prints at startup. stdout ends up in server.log, so it carries no key."""
-    return f"Phone (same Wi-Fi): http://{ip}:{port}/ (key: py -3 scripts/lan.py --show)"
+    return f"Phone (same network): http://{ip}:{port}/ (key: py -3 scripts/lan.py --show)"
 
 
 class Addresses:
     """The computer's LAN addresses, looked up again every `ttl_s` seconds: the IP can change while the
-    office runs (DHCP, another Wi-Fi). An unknown Host forces a lookup, at most once every `retry_s`."""
+    office runs (DHCP, another network). An unknown Host forces a lookup, at most once every `retry_s`."""
 
     def __init__(self, lookup=local_addresses, clock=time.monotonic, ttl_s=30, retry_s=5):
         self.lookup = lookup
