@@ -90,7 +90,10 @@ class SeveralProjects(unittest.TestCase):
     def test_claude_md_only_once_and_removal(self):
         self.configure(self.a, "--apply", "--claude-md")
         self.configure(self.a, "--apply", "--claude-md")
-        self.assertEqual((self.a / "CLAUDE.md").read_text(encoding="utf-8").count("<!-- agents-office:boards -->"), 1)
+        text = (self.a / "CLAUDE.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count("<!-- agents-office:boards -->"), 1)
+        # Only the main session writes the boards: subagents report to it
+        self.assertIn("Solo la sesión principal", text)
         self.configure(self.a, "--remove")
         self.hook(self.a, "SessionStart")
         self.assertFalse((self.data / "events").exists())

@@ -15,7 +15,7 @@ Without --apply it only shows the plan: it writes nothing. With --apply:
 2. Boards: looks for pendientes.md and fricciones.md (at the root or in docs/). If missing, creates them with
    the standard format (server/boards.py).
 3. With --claude-md, adds to the project's CLAUDE.md a block (between markers, can be re-run) asking the
-   agents to keep the boards up to date.
+   main session (only it: subagents report to it) to keep the boards up to date.
 4. Registers the project in <data>/projects.json and regenerates <data>/config.json for the hook.
 
 New sessions of the project are captured from then on (the hook reads the config on every event).
@@ -48,6 +48,9 @@ OLD_START_MARK = "<!-- oficina:tablones -->"
 def claude_md_block(tasks, frictions):
     return f"""{START_MARK}
 ## Tablones de la oficina
+
+Solo la sesión principal (el `main`) escribe en estos tablones. Los subagentes no los tocan: lo que haya que
+anotar se lo informan al `main` en su respuesta.
 
 - `{tasks}`: cuando empezás una tarea pedida, anotala en **En curso** (`- [ ] tarea`). Lo que quede para
   después va en **Siguen**. Al terminarla, pasala a **Hechas** con `- [x]`.
