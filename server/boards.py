@@ -7,7 +7,8 @@ Tasks (the owner's inbox), in three columns:
   entries, as in equipo-idi), every entry is something that comes next;
 - done: tasks completed in the session, plus the "Hechas" section of the tasks file.
 
-Audits: the "## date · title" entries of the frictions file, open or resolved according to their Estado field.
+Audits: the dated entries of the frictions file ("## date · title", or "### date: title" under grouping
+sections, see Area.entries), open or resolved according to their Estado field.
 
 The files are team documents, written in Spanish: section names and templates are Spanish on purpose.
 Standard formats (scripts/configure.py creates them in new projects): see TASKS_TEMPLATE and FRICTIONS_TEMPLATE.
@@ -41,7 +42,8 @@ Auditoría del trabajo: lo que trabó, salió mal o se repite. Una entrada por f
 # Section titles accepted for each column (Spanish and English)
 SECTIONS = {
     "in_progress": ("en curso", "haciendo", "doing", "in progress"),
-    "next": ("siguen", "siguientes", "próximas", "proximas", "pendientes", "por hacer", "to do", "todo", "next"),
+    "next": ("siguen", "siguientes", "próximas", "proximas", "pendientes", "por hacer", "abiertos", "abiertas", "to do",
+             "todo", "next"),
     "done": ("hechas", "hecho", "realizadas", "terminadas", "done"),
 }
 ITEM = re.compile(r"^\s*[-*]\s+(?:\[( |x|X)\]\s+)?(.+?)\s*$")
@@ -92,7 +94,7 @@ def audits(entries):
     for e in (entries or {}).get("entries", []):
         fields = {k.lower(): v for k, v in (e.get("fields") or {}).items()}
         status = next((v for k, v in fields.items() if k.startswith("estado") or k.startswith("status")), "")
-        is_resolved = bool(re.search(r"resuelt|cerrad|hecho|solved|closed|resolved", status, re.I))
+        is_resolved = bool(re.search(r"resuelt|cerrad|hecho|aplicad|descartad|solved|closed|resolved", status, re.I))
         item = {"title": e["title"], "date": e.get("date"), "status": status or "abierta",
                 "details": {k: v for k, v in (e.get("fields") or {}).items() if v}}
         (resolved if is_resolved else open_).append(item)

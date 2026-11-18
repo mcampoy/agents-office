@@ -223,18 +223,33 @@ class Area:
     # --- Team files (from the cache) ---------------------------------------------------------
 
     def entries(self, relative):
-        """'## date · title' entries with their bold fields. If that fails, the raw text."""
+        """Dated entries with their fields. If that fails, the raw text.
+
+        Two layouts: '## date · title' entries with bold fields (the standard one), or, when the file has
+        '### date: title' entries, those under grouping '##' sections ('## Abiertas', '## Cerradas'), with
+        their fields as a list ('- Estado: abierta'). Between date and title: '·', '-', '–' or ':'."""
         text = self.text(relative)
         if text is None:
             return {"path": relative, "entries": [], "unread": True}
-        entries, current = [], None
         # HTML comments (for example, the format guide in the templates) are not entries
-        for line in re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines():
-            m = re.match(r"^##\s+(.+)$", line)
+        lines = re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines()
+        dated = r"(\d{4}-\d{2}-\d{2})\s*[·\-–:]\s*(.+)$"
+        grouped = any(re.match(r"^###\s+" + dated, line) for line in lines)
+        entries, current = [], None
+        for line in lines:
+            m = re.match(r"^(#{2,3})\s+(.+)$", line)
             if m:
-                title = m.group(1).strip()
-                d = re.match(r"^(\d{4}-\d{2}-\d{2})\s*[·\-–]\s*(.+)$", title)
-                current = {"date": d.group(1) if d else None, "title": d.group(2) if d else title,
+                title = m.group(2).strip()
+                d = re.match(r"^" + dated, title)
+                # Grouped: '##' only groups, and a '###' without a date (the format example) is not an entry
+                if grouped and (len(m.group(1)) == 2 or not d):
+                    current = None
+                    continue
+                if not grouped and len(m.group(1)) == 3:
+                    if current is not None:
+                        current["text"].append(line)
+                    continue
+                current = {"date": d.group(1) if d else None, "title": d.group(2).strip() if d else title,
                            "fields": {}, "text": []}
                 entries.append(current)
                 continue
@@ -247,6 +262,10 @@ class Area:
             r = re.match(r"^(Repeticiones|Propuesta|Riesgo):\s*(.*)$", line)
             if r:
                 current["fields"][r.group(1)] = r.group(2).strip()
+            if grouped:
+                li = re.match(r"^\s*[-*]\s+(?:\*\*)?([^:*`]{1,40}?):(?:\*\*)?\s*(.*)$", line)
+                if li:
+                    current["fields"][li.group(1).strip()] = li.group(2).strip()
         for e in entries:
             e["text"] = "\n".join(e["text"]).strip()
             e["paths"] = sorted(set(re.findall(r"`([^`\s]+\.md)`", e["text"])))
