@@ -62,9 +62,17 @@ anotar se lo informan al `main` en su respuesta.
 
 
 def find(folder, names):
+    """The first of `names` that exists, ignoring case, with its name as it is on disk ('docs/PENDIENTES.md'):
+    the office reads the files by that name."""
     for n in names:
-        if (folder / n).is_file():
-            return n
+        parent, _, name = n.rpartition("/")
+        try:
+            entries = sorted((folder / parent).iterdir()) if parent else sorted(folder.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.lower() == name.lower() and entry.is_file():
+                return f"{parent}/{entry.name}" if parent else entry.name
     return None
 
 
@@ -124,8 +132,8 @@ def plan(folder, ident, given_profile, data):
     target = data / "profiles" / ident
     agents = project_agents(folder)
     main_agent = project_main_agent(folder)
-    tasks = find(folder, ["pendientes.md", "PENDIENTES.md", "docs/pendientes.md"])
-    frictions = find(folder, ["fricciones.md", "FRICCIONES.md", "docs/fricciones.md"])
+    tasks = find(folder, ["pendientes.md", "docs/pendientes.md"])
+    frictions = find(folder, ["fricciones.md", "docs/fricciones.md"])
     board_files = {"tasks": tasks or "pendientes.md", "frictions": frictions or "fricciones.md",
                    "create": [n for n, exists in (("pendientes.md", tasks), ("fricciones.md", frictions)) if not exists]}
     zones = [{"agent": a, "zone": suggested_zone(a)} for a in agents if a != main_agent]

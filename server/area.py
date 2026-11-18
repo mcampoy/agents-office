@@ -113,15 +113,23 @@ class Area:
 
     # --- Cache ---------------------------------------------------------------------
 
+    def key(self, relative):
+        """The cached path for `relative`, ignoring case if there is no exact match (a profile may say
+        'docs/pendientes.md' for 'docs/PENDIENTES.md'; on Windows they are the same file)."""
+        if relative in self._cache or not isinstance(relative, str):
+            return relative
+        lower = relative.lower()
+        return next((k for k in self._cache if k.lower() == lower), relative)
+
     def text(self, relative):
-        cached = self._cache.get(relative)
+        cached = self._cache.get(self.key(relative))
         return cached[1] if cached else None
 
     def cached(self):
         return sorted(self._cache)
 
     def exists(self, relative):
-        return relative in self._cache
+        return self.key(relative) in self._cache
 
     def _lines(self, relative, n=HEADER_LINES):
         text = self.text(relative)
