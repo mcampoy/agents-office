@@ -995,6 +995,53 @@ class Boards(unittest.TestCase):
             empty = boards.tasks(area.text("pendientes.md"), area.entries("pendientes.md"), [])
             self.assertEqual(empty, {"in_progress": [], "next": [], "done": []})
 
+    def test_grouped_format_with_subentries(self):
+        """Colmena's format: '## Abiertos' with '- [priority] task', and frictions as '### date: title' under
+        grouping '##' sections, with list fields; the example entry outside a comment is not a friction."""
+        from server import boards
+        tasks_md = ("# Pendientes\n\n## Abiertos\n\n"
+                    "- [media] Migrar el login (revisión, 2026-11-12)\n- [alta] Cerrar el release (PR #40, 2026-11-14)\n")
+        frictions_md = ("# Fricciones\n\nFormato:\n\n### AAAA-MM-DD: título corto\n- Estado: abierta\n- Qué pasó: ...\n\n"
+                        "## Abiertas\n\n### 2026-11-14: El build tarda\n- Estado: abierta\n- Qué pasó: tarda 10 min\n"
+                        "- Propuesta: cachear dependencias\n\n"
+                        "## Cerradas\n\n### 2026-11-10: Permiso de la API\n- Estado: aplicada (PR #31)\n\n"
+                        "### 2026-11-08 · Idea de logs\n- Estado: descartada (no aporta)\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs").mkdir()
+            (root / "docs" / "PENDIENTES.md").write_text(tasks_md, encoding="utf-8")
+            (root / "docs" / "FRICCIONES.md").write_text(frictions_md, encoding="utf-8")
+            area = Area(root, roots=["."])
+            area.sweep()
+            t = boards.tasks(area.text("docs/PENDIENTES.md"), area.entries("docs/PENDIENTES.md"), [])
+            self.assertEqual([i["title"] for i in t["next"]], ["[media] Migrar el login (revisión, 2026-11-12)",
+                                                              "[alta] Cerrar el release (PR #40, 2026-11-14)"])
+            entries = area.entries("docs/FRICCIONES.md")["entries"]
+            self.assertEqual([(e["date"], e["title"]) for e in entries],
+                             [("2026-11-14", "El build tarda"), ("2026-11-10", "Permiso de la API"),
+                              ("2026-11-08", "Idea de logs")])
+            self.assertEqual(entries[0]["fields"], {"Estado": "abierta", "Qué pasó": "tarda 10 min",
+                                                    "Propuesta": "cachear dependencias"})
+            a = boards.audits(area.entries("docs/FRICCIONES.md"))
+            self.assertEqual([i["title"] for i in a["open"]], ["El build tarda"])
+            self.assertEqual([i["title"] for i in a["resolved"]], ["Permiso de la API", "Idea de logs"])
+
+    def test_standard_frictions_keep_working(self):
+        from server import boards
+        text = boards.FRICTIONS_TEMPLATE + ("\n## 2026-11-15 · Proyecto no aparece\n**Estado:** abierta\n"
+                                            "**Qué pasó:** se registró con la oficina abierta\n- paso 1: abrir\n\n"
+                                            "## 2026-11-09 · PRs apilados\n**Estado:** resuelta\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "fricciones.md").write_text(text, encoding="utf-8")
+            area = Area(Path(tmp), roots=["."])
+            area.sweep()
+            entries = area.entries("fricciones.md")["entries"]
+            self.assertEqual([e["title"] for e in entries], ["Proyecto no aparece", "PRs apilados"])
+            self.assertEqual(entries[0]["fields"], {"Estado": "abierta", "Qué pasó": "se registró con la oficina abierta"})
+            a = boards.audits(area.entries("fricciones.md"))
+            self.assertEqual(([i["title"] for i in a["open"]], [i["title"] for i in a["resolved"]]),
+                             (["Proyecto no aparece"], ["PRs apilados"]))
+
     def test_open_and_resolved_audits(self):
         from server import boards
         entries = {"entries": [{"title": "Permiso de Drive", "date": "2026-11-01", "fields": {"Estado": "abierta"}},
