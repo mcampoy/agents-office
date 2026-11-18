@@ -50,7 +50,7 @@ Requisitos: Windows, Claude Code, Python 3.12+ (solo librería estándar) y Node
    - arma el perfil en `~/.agents-office/profiles/<id>/`, ubicando a cada agente de `.claude/agents` en una sala (las lentes en lectura, el verificador en el paso…);
    - arma un plano a medida: solo las salas que el proyecto puede usar, cada una con los escritorios que necesitan sus agentes y uno de margen;
    - crea `pendientes.md` y `fricciones.md` si no existen;
-   - con `--claude-md`, les pide a los agentes del proyecto que mantengan los tablones.
+   - con `--claude-md`, le pide a la sesión principal (el `main`) que mantenga los tablones; los subagentes no los tocan y le informan a ella lo que haya que anotar. Es opcional: si el proyecto ya tiene sus propias reglas para los tablones, no lo uses.
 
    Para un perfil hecho a mano: `--profile <carpeta>`. Para dar de baja: `--remove`.
 
