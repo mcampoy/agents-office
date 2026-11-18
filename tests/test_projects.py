@@ -87,6 +87,45 @@ class SeveralProjects(unittest.TestCase):
         self.assertEqual(offices.pick("project-a").project, "project-a")
         self.assertEqual({p["id"] for p in offices.listing()}, {"project-a", "project-b"})
 
+    def test_registry_reloads_without_restarting(self):
+        # The server is already running (with no project, it shows the single-profile office)
+        offices = Offices(data=self.data)
+        offices.update(force=True)
+        self.assertEqual(set(offices.offices), {"office"})
+        # A project is registered while it runs: it appears on the next cycle
+        self.configure(self.a, "--apply")
+        self.hook(self.a, "SessionStart")
+        offices.update()
+        self.assertEqual(set(offices.offices), {"project-a"})
+        self.assertEqual([s["id"] for s in offices.offices["project-a"].snapshot["sessions"]], ["s-project-a"])
+        # Another one: the first keeps its office (and its state)
+        first = offices.offices["project-a"]
+        self.configure(self.b, "--apply")
+        offices.update()
+        self.assertEqual(set(offices.offices), {"project-a", "project-b"})
+        self.assertIs(offices.offices["project-a"], first)
+        self.assertTrue(offices.is_current(first))
+        # A project moved to another folder: its office is rebuilt with the new folder
+        moved = self.a.parent / "project-a-moved"
+        self.a.rename(moved)
+        self.configure(moved, "--apply", "--id", "project-a")
+        offices.update()
+        self.assertIsNot(offices.offices["project-a"], first)
+        self.assertFalse(offices.is_current(first))
+        self.assertEqual(Path(offices.offices["project-a"].team), moved)
+        # Removed: it disappears from the list
+        self.configure(self.b, "--remove")
+        offices.update()
+        self.assertEqual(set(offices.offices), {"project-a"})
+
+    def test_fixed_profile_ignores_the_registry(self):
+        self.configure(self.a, "--apply")
+        offices = Offices(data=self.data, profile=str(REPO / "profiles" / "example"))
+        offices.update(force=True)
+        self.configure(self.b, "--apply")
+        offices.update()
+        self.assertEqual(set(offices.offices), {"office"})
+
     def test_claude_md_only_once_and_removal(self):
         self.configure(self.a, "--apply", "--claude-md")
         self.configure(self.a, "--apply", "--claude-md")
