@@ -167,6 +167,14 @@ def create_profile(folder, p):
     }
     if not (target / "profile.json").exists():
         (target / "profile.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    else:
+        # The project moved: only its folder changes, the rest (maybe edited by hand) stays
+        existing = json.loads((target / "profile.json").read_text(encoding="utf-8"))
+        if existing.get("area_root") != str(folder):
+            print(f"El proyecto cambió de carpeta: el perfil ahora apunta a {folder}")
+            existing["area_root"] = str(folder)
+            (target / "profile.json").write_text(json.dumps(existing, ensure_ascii=False, indent=2) + "\n",
+                                                 encoding="utf-8")
     zones = {
         "_comment": "Zona de cada agente. Patrones con '*'. Un agente sin regla va a la recepción.",
         "rules": [{"agent": "lente-*", "zone": "reading"}, {"agent": p["main_agent"], "zone": "coordination"}]

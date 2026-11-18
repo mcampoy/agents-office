@@ -270,6 +270,8 @@ def create_server(offices, port, lan=None, host=None, loopback=None):
                 with office.changed:
                     office.changed.wait_for(lambda: office.version != sent, timeout=HEARTBEAT_S)
                     version, snapshot = office.version, office.snapshot
+                if not offices.is_current(office):
+                    return  # projects.json changed: EventSource reconnects to the current office
                 if version != sent and snapshot is not None:
                     data = json.dumps(snapshot, ensure_ascii=False, default=str)
                     self.wfile.write(f"event: state\nid: {version}\ndata: {data}\n\n".encode("utf-8"))

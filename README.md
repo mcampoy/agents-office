@@ -58,6 +58,8 @@ Requisitos: Windows, Claude Code, Python 3.12+ (solo librería estándar) y Node
 
 Solo se registran las sesiones de los proyectos configurados; el resto no deja rastro. Si se mueve o se renombra la carpeta de este repo, hay que volver a correr el instalador.
 
+Con la oficina abierta no hace falta reiniciarla: al sumar, dar de baja o mover un proyecto, el servidor lo toma solo y alcanza con recargar la página. Si se mueve la carpeta de un proyecto, hay que volver a correr `/oficina:configurar` desde la carpeta nueva (o `configure.py <carpeta-nueva> --apply`, con `--id` si cambió el nombre): actualiza la ruta del perfil y conserva el plano y las salas.
+
 ## Uso diario
 
 - Desde Claude Code: `/oficina:abrir`.
