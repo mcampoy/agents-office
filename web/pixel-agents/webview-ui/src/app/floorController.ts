@@ -16,8 +16,8 @@ export const DONE_REST_S = 180;
 const OWNER_DWELL_S = 5;
 /** The main agent stays this long at each subagent's desk when delegating. */
 const DELEGATE_DWELL_S = 3;
-/** The orchestrator (Claude's crab) is drawn this much larger: it is short and stands out as the one in charge. */
-const ORCHESTRATOR_SCALE = 1.5;
+/** The orchestrator (Claude's crab as a head) is drawn this much larger: it stands out as the one in charge. */
+const ORCHESTRATOR_SCALE = 1.25;
 /** A visit that never arrives (blocked path) gives up after this long. */
 const VISIT_TIMEOUT_S = 40;
 /** If the owner cannot walk to the main agent, the request bubble shows at the desk this long. */
@@ -79,8 +79,9 @@ export class FloorController {
   private byId = new Map<number, Token>();
   private nextId = 1;
   private spriteByType = new Map<string, number>();
-  /** Key of the orchestrator: the current session's main agent, the one the owner talks to. It is Claude's crab
-   *  and the only one at the Coordination desk; the other sessions' main agents look like their type. */
+  /** Key of the orchestrator: the current session's main agent, the one the owner talks to. It wears Claude's
+   *  crab as a head and is the only one at the Coordination desk; the other sessions' main agents
+   *  look like their type. */
   private orchestrator: string | null = null;
   /** Newest owner prompt seen (ms). Only a newer one counts: with several sessions open, the server's
    *  "current" session alternates and last_prompt goes back and forth between their prompts. */
@@ -228,7 +229,7 @@ export class FloorController {
         if (!initial && !inst.main) launched.push(t);
       }
       t.inst = inst;
-      // The current session changed: the crab moves to its main agent and the previous one gets its own look back
+      // The current session changed: the orchestrator's look moves to its main agent and the previous one gets its own look back
       const ch = this.os.characters.get(t.id);
       const sprite = this.spriteFor(inst);
       if (ch) {
