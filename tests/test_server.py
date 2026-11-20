@@ -679,6 +679,32 @@ class RealAcceptance(unittest.TestCase):
         self.assertEqual(snap["sessions"][0]["last_user_prompt"][:19], self.ts("UserPromptSubmit").isoformat()[:19])
 
 
+class ResumedAfterEnd(unittest.TestCase):
+    """Claude Code can send SessionEnd and keep the same session going without a new SessionStart (seen on 20/11)."""
+
+    def test_activity_after_session_end_reopens_it(self):
+        events = [main(0, "SessionStart"), main(1, "UserPromptSubmit"), main(2, "Stop"),
+                  main(10, "SessionEnd", summary={"reason": "other"}),
+                  main(600, "UserPromptSubmit"), main(601, "PreToolUse", tool_name="Bash", tool_use_id="b1")]
+        snap = model(events).snapshot(T0 + dt.timedelta(seconds=602))
+        self.assertIsNone(snap["sessions"][0]["end"])
+        self.assertEqual(instances(snap)["s1:main"]["state"], "working")
+
+    def test_a_subagent_event_also_reopens_the_main_agent(self):
+        events = [main(0, "SessionStart"), main(10, "SessionEnd", summary={"reason": "other"}),
+                  sub(600, "SubagentStart", "v1", "verificador")]
+        snap = model(events).snapshot(T0 + dt.timedelta(seconds=601))
+        self.assertIsNone(snap["sessions"][0]["end"])
+        self.assertIn("s1:main", instances(snap))
+        self.assertIsNone(instances(snap)["s1:main"]["end"])
+
+    def test_events_trailing_the_session_end_do_not_reopen_it(self):
+        events = [main(0, "SessionStart"), main(1, "UserPromptSubmit"),
+                  main(10, "SessionEnd", summary={"reason": "exit"}), main(12, "Stop")]
+        snap = model(events).snapshot(T0 + dt.timedelta(seconds=13))
+        self.assertIsNotNone(snap["sessions"][0]["end"])
+
+
 class NewStates(unittest.TestCase):
     def test_waiting_subagents_ends_when_they_return(self):
         events = [main(0, "SessionStart"), launch(1, "u", "verificador", "v"),

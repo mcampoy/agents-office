@@ -173,6 +173,15 @@ class Model:
             or summary.get("file") or summary.get("description") or summary.get("command")
         if e.get("cwd"):
             session["cwd"] = e["cwd"]
+        # A session resumed after its SessionEnd may not send a new SessionStart: real activity reopens it, and
+        # its main agent with it (the first event may come from a subagent). The 5 s margin ignores events that
+        # trail the SessionEnd itself.
+        if name != "SessionEnd" and session.get("end") and (moment - session["end"]).total_seconds() > 5:
+            session["end"] = None
+            inst.end = None
+            main = self.instances.get(f"{session['id']}:main")
+            if main is not None:
+                main.end = None
 
         if name == "SessionStart":
             session["start"] = min(session["start"], moment)
