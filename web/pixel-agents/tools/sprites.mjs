@@ -8,7 +8,7 @@
 //                change; skin, hair and eyes stay intact
 //   char_24      the owner's avatar, derived from char_4 by layers (hair, glasses, beard, infinity,
 //                sneakers). See docs/avatar.md
-//   char_25      the orchestrator (the current session's main agent): Claude's crab, drawn from scratch
+//   char_25      the orchestrator (the current session's main agent): Claude's crab as the head of a person in a floral shirt, drawn from scratch
 //   cast.json    which index is what
 //
 // Format of each sheet: 112×96, 16×32 frames, 7 per row (walk ×3, type ×2, read ×2),
@@ -248,97 +248,195 @@ function avatar() {
   return png;
 }
 
-// --- Orchestrator: Claude's crab --------------------------------------------------------------
+// --- Orchestrator: Claude Code crab mascot on a casual character ---------------------------
 //
-// Drawn from scratch (it derives from no base sprite). Body 12×9, arms on the sides, four legs.
-// It stands in the lower half of the frame, where a person's legs and torso go.
+// Drawn from scratch (it derives from no base sprite) as pixel grids, one per view, standing. Claude Code's
+// flat orange crab head sits on a body with a floral open shirt over a white tee with a gold chain, denim shorts
+// and white sneakers. The other poses are derived from those grids.
 
-const CRAB = {
-  body: '#d97757',
-  shade: '#b65c40',
-  eye: '#1e1410',
-  sheet: '#f4efe6',
-  ink: '#9a9187',
+const ORC = {
+  K: '#3a1d10', // outline (body)
+  O: '#d97757', // crab head and exposed skin
+  D: '#ad523d', // exposed-skin shade
+  E: '#000000', // crab eyes
+  S: '#e2506a', // shirt
+  s: '#b03650', // shirt, shade
+  F: '#fbe3e6', // shirt, flower
+  G: '#2f9c86', // shirt, leaf
+  T: '#f2f2f2', // tee
+  C: '#f2c230', // gold chain
+  J: '#4673b8', // shorts
+  j: '#2c5088', // shorts, shade
+  N: '#f4f4f4', // sneakers
+  n: '#9a9a9a', // soles
+  P: '#f4efe6', // sheet being read
+  I: '#9a9187', // sheet ink
 };
 
-/** Top row of the body per row of the sheet and per pose (walking or seated), so the feet land where a
- *  person's do: row 29 standing; seated facing down it sits higher, so it shows above the desk like a person's
- *  head; facing up the chair hides the legs. */
-const CRAB_TOP = {
-  down: { walk: 17, seated: 15 },
-  up: { walk: 17, seated: 16 },
-  right: { walk: 17, seated: 17 },
-};
+// The head is Claude Code's flat crab: a wide orange rectangle, two high-set square eyes, side arms below the
+// eyes and a smile. Its four legs, in two separated pairs, are the beard: they hang over the shirt's collar, so
+// the head sits on the body with no gap (the last BEARD rows of each grid overlap the body). The back omits the
+// face; the right profile keeps one eye, the near arm and the front of the beard.
+const HEAD_DOWN = [
+  '.OOOOOOOOOOOOOO.',
+  '.OOOOOOOOOOOOOO.',
+  '.OOEEOOOOOOEEOO.',
+  '.OOEEOOOOOOEEOO.',
+  'OOOOOOOOOOOOOOOO',
+  'OOOOOOOOOOOOOOOO',
+  '.OOOOEOOOOEOOOO.',
+  '.OOOOOEEEEOOOOO.',
+  '..OO.OO..OO.OO..',
+  '..OO.OO..OO.OO..',
+];
+const HEAD_UP = HEAD_DOWN.map((r, y) => (y < 8 ? r.replaceAll('E', 'O') : r));
+const HEAD_RIGHT = [
+  '....OOOOOOOOO...',
+  '....OOOOOOOOO...',
+  '....OOOOOOEEO...',
+  '....OOOOOOEEO...',
+  '....OOOOOOOOOOO.',
+  '....OOOOOOOOOOO.',
+  '....OOOOOOOOO...',
+  '....OOOOOOOEO...',
+  '........OO.OO...',
+  '........OO.OO...',
+];
+// Rows of the beard (the crab's legs) at the bottom of each head grid, drawn over the body's first rows
+const BEARD = 2;
+const BODY_DOWN = [
+  '..KSSSTTTTSSSK..',
+  '..KSFSCTTCSGSK..',
+  '.KOKSGTCCTFSKOK.',
+  '.KOKSSTTTTSSKOK.',
+  '.KOKSFTTTTSGKDK.',
+  '.KOKsssTTsssKDK.',
+  '.KDKJJJJJJJJKDK.',
+  '..KKJJJJJJJJKK..',
+  '...KJJJjjJJJK...',
+  '...KjjjKKjjjK...',
+  '...KOOK..KOOK...',
+  '...KOOK..KOOK...',
+  '..KNNNK..KNNNK..',
+  '..KNNNK..KNNNK..',
+  '..KnnnK..KnnnK..',
+];
+const BODY_RIGHT = [
+  '....KSSSSSSTK...',
+  '....KSFSSSGCK...',
+  '....KSKSSSKTK...',
+  '....KSKOOKSTK...',
+  '....KFKOOKSTK...',
+  '....KsKOOKssK...',
+  '....KJKDDKJJK...',
+  '....KJJKKJJJK...',
+  '....KJJJJJjjK...',
+  '....KjjjjjjjK...',
+  '.....KOOKOOK....',
+  '.....KOOKOOK....',
+  '.....KNNKNNNK...',
+  '....KNNNKNNNNK..',
+  '....KnnnKnnnnK..',
+];
+// Seated in profile: thighs forward and shins down, from the shorts' second row on
+const SEATED_RIGHT_LEGS = [
+  '....KJJKKJJJK...',
+  '....KJJJJJJJJJK.',
+  '....KjjjjjjjjjK.',
+  '....KKKKKKKKOOK.',
+  '...........KOOK.',
+  '...........KOOK.',
+  '..........KNNNNK',
+  '..........KnnnnK',
+];
+// First row of the body (the shirt's collar): so the feet land on row 29, like a person's. The head sits on top
+const BODY = 15;
 
-function rect(png, ox, oy, x0, x1, y0, y1, c) {
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (y >= 0 && y < H) paint(png, ox + x, oy + y, c);
+/** Standing grid (32 rows of cells) of a view: body, then the head on top. From behind there is no tee or chain. */
+function standing(view) {
+  const grid = Array.from({ length: H }, () => '.'.repeat(W));
+  const head = { down: HEAD_DOWN, up: HEAD_UP, right: HEAD_RIGHT }[view];
+  const body = view === 'right' ? BODY_RIGHT : BODY_DOWN;
+  body.forEach((r, i) => (grid[BODY + i] = r));
+  const cells = grid.map((r) => [...r].map((c) => (view === 'up' && 'TC'.includes(c) ? 'S' : c)));
+  // The head goes over the body: the beard covers the collar and the body shows between its strands
+  const top = BODY + BEARD - head.length;
+  head.forEach((r, i) => [...r].forEach((c, x) => c !== '.' && (cells[top + i][x] = c)));
+  return cells;
 }
 
-/**
- * One frame of the crab.
- * view: 'down' | 'up' | 'right'. legs: 'all' | 'a' | 'b' (pair raised) | 'none'. arms: 0 or -1 (raised one row).
- * sheet: null, 0 or 1 (reading, with the line of text that moves).
- */
-function crabFrame(png, ox, oy, { view, top, legs, arms, sheet }) {
+const clone = (g) => g.map((r) => [...r]);
+const empty = () => [...'.'.repeat(W)];
+
+/** Moves the whole grid dy rows down, clipping at the frame. */
+function shift(g, dy) {
+  return g.map((_, y) => (g[y - dy] ? [...g[y - dy]] : empty()));
+}
+
+/** Raises one leg one row: columns x0..x1, from the knee down. */
+function raiseLeg(g, x0, x1) {
+  const knee = BODY + 12;
+  for (let y = knee; y < H; y++) for (let x = x0; x <= x1; x++) g[y - 1][x] = g[y][x];
+}
+
+/** Sheet held in front of the chest while reading; the lines of text move. */
+function holdSheet(g, x0, x1, y0, line) {
+  for (let y = y0; y <= y0 + 6; y++) {
+    for (let x = x0; x <= x1; x++) g[y][x] = y === y0 || y === y0 + 6 || x === x0 || x === x1 ? 'K' : 'P';
+  }
+  for (const dy of [2 + line, 4 + line]) for (let x = x0 + 1; x <= x1 - 1; x++) g[y0 + dy][x] = 'I';
+}
+
+function frames(view) {
+  const base = standing(view);
   const side = view === 'right';
-  const [x0, x1] = side ? [3, 12] : [2, 13];
-  // Legs (behind the body): four, the raised pair one row shorter
-  if (legs !== 'none') {
-    const cols = side ? [4, 6, 9, 11] : [3, 5, 10, 12];
-    cols.forEach((x, k) => {
-      const raised = (legs === 'a' && k % 2 === 0) || (legs === 'b' && k % 2 === 1);
-      rect(png, ox, oy, x, x, top + 9, top + 9 + (raised ? 2 : 3), CRAB.body);
-    });
-  }
-  // Body, with a shaded bottom row
-  rect(png, ox, oy, x0, x1, top, top + 7, CRAB.body);
-  rect(png, ox, oy, x0, x1, top + 8, top + 8, CRAB.shade);
-  if (view === 'up') rect(png, ox, oy, x0 + 1, x1 - 1, top + 1, top + 1, CRAB.shade);
-  // Arms
-  const ay = top + 4 + arms;
-  if (side) {
-    rect(png, ox, oy, 13, 14, ay, ay + 1, CRAB.body);
-    rect(png, ox, oy, 2, 2, ay, ay + 1, CRAB.shade);
+  // Walk ×3: one leg raised, both down, the other raised
+  const [a, b] = side ? [[4, 7], [9, 13]] : [[2, 7], [8, 13]];
+  const w0 = clone(base);
+  raiseLeg(w0, ...a);
+  const w2 = clone(base);
+  raiseLeg(w2, ...b);
+  // Seated: facing down it sits lower (the desk hides the legs), facing up the chair hides them, in profile the
+  // legs bend forward
+  let seated;
+  if (view === 'down') seated = shift(base, 4);
+  else if (view === 'up') {
+    seated = shift(base, 1);
+    for (let y = 26; y < H; y++) seated[y] = empty();
   } else {
-    rect(png, ox, oy, 0, 1, ay, ay + 1, CRAB.body);
-    rect(png, ox, oy, 14, 15, ay, ay + 1, CRAB.body);
+    seated = clone(base);
+    SEATED_RIGHT_LEGS.forEach((r, i) => (seated[BODY + 9 + i] = [...r]));
   }
-  // Eyes: two looking down, one in profile, none from behind
-  if (view === 'down') {
-    rect(png, ox, oy, 5, 5, top + 2, top + 3, CRAB.eye);
-    rect(png, ox, oy, 10, 10, top + 2, top + 3, CRAB.eye);
-  } else if (side) {
-    rect(png, ox, oy, 10, 10, top + 2, top + 3, CRAB.eye);
+  // Type ×2: the hands go up one row and back
+  const typing = clone(seated);
+  const hands = side ? [7, 8] : [2, 13];
+  const handRow = seated.findIndex((r, y) => y > BODY + 2 && r[hands[0]] === 'D');
+  if (handRow > 0) {
+    for (const x of hands) {
+      typing[handRow][x] = side ? 'J' : '.';
+      typing[handRow - 1][x] = 'D';
+    }
   }
-  // Sheet held in front while reading
-  if (sheet !== null && view !== 'up') {
-    const [sx0, sx1] = side ? [12, 15] : [4, 11];
-    rect(png, ox, oy, sx0, sx1, top + 4, top + 9, CRAB.sheet);
-    for (const dy of [5 + sheet, 7 + sheet]) rect(png, ox, oy, sx0 + 1, sx1 - 1, top + dy, top + dy, CRAB.ink);
-  }
+  // Read ×2: holds a sheet (from behind it does not show)
+  const reading = [0, 1].map((line) => {
+    const g = clone(seated);
+    const chest = BODY + 3 + (view === 'down' ? 4 : 0);
+    if (view === 'down') holdSheet(g, 4, 11, chest, line);
+    else if (side) holdSheet(g, 11, 15, chest, line);
+    return g;
+  });
+  return [w0, clone(base), w2, seated, typing, ...reading];
 }
 
 function orchestrator() {
   const png = new PNG({ width: W * FRAMES, height: H * 3 });
   png.data.fill(0);
   ['down', 'up', 'right'].forEach((view, row) => {
-    const oy = row * H;
-    const walk = CRAB_TOP[view].walk;
-    const seated = CRAB_TOP[view].seated;
-    const feet = view === 'up' ? 'none' : 'all';
-    const poses = [
-      // Walk ×3
-      { top: walk, legs: 'a', arms: 0, sheet: null },
-      { top: walk, legs: 'all', arms: 0, sheet: null },
-      { top: walk, legs: 'b', arms: 0, sheet: null },
-      // Type ×2: the arms go up and down
-      { top: seated, legs: feet, arms: 0, sheet: null },
-      { top: seated, legs: feet, arms: -1, sheet: null },
-      // Read ×2: holds a sheet, the line of text moves
-      { top: seated, legs: feet, arms: 0, sheet: 0 },
-      { top: seated, legs: feet, arms: 0, sheet: 1 },
-    ];
-    poses.forEach((pose, f) => crabFrame(png, f * W, oy, { view, ...pose }));
+    frames(view).forEach((g, f) => {
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) if (g[y][x] !== '.') paint(png, f * W + x, row * H + y, ORC[g[y][x]]);
+      }
+    });
   });
   return png;
 }
