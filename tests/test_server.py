@@ -1052,6 +1052,17 @@ class Boards(unittest.TestCase):
             self.assertEqual([i["title"] for i in a["open"]], ["El build tarda"])
             self.assertEqual([i["title"] for i in a["resolved"]], ["Permiso de la API", "Idea de logs"])
 
+    def test_board_path_ignores_case(self):
+        """A profile written with 'docs/pendientes.md' still reads 'docs/PENDIENTES.md'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "docs" / "PENDIENTES.md").write_text("## Abiertos\n- [alta] algo\n", encoding="utf-8")
+            area = Area(Path(tmp), roots=["."])
+            area.sweep()
+            self.assertEqual(area.text("docs/pendientes.md"), "## Abiertos\n- [alta] algo\n")
+            self.assertTrue(area.exists("docs/pendientes.md"))
+            self.assertIsNone(area.text("docs/otro.md"))
+
     def test_standard_frictions_keep_working(self):
         from server import boards
         text = boards.FRICTIONS_TEMPLATE + ("\n## 2026-11-15 · Proyecto no aparece\n**Estado:** abierta\n"

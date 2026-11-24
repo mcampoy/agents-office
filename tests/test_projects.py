@@ -50,6 +50,15 @@ class SeveralProjects(unittest.TestCase):
                            capture_output=True, env=env, timeout=30)
         self.assertEqual((r.returncode, r.stdout, r.stderr), (0, b"", b""))
 
+    def test_boards_keep_their_name_as_on_disk(self):
+        (self.a / "docs").mkdir()
+        (self.a / "docs" / "PENDIENTES.md").write_text("# P\n\n## Abiertos\n- [media] algo\n", encoding="utf-8")
+        (self.a / "docs" / "FRICCIONES.md").write_text("# F\n", encoding="utf-8")
+        self.configure(self.a, "--apply")
+        profile = json.loads((self.data / "profiles" / "project-a" / "profile.json").read_text(encoding="utf-8"))
+        self.assertEqual(profile["files"], {"tasks": "docs/PENDIENTES.md", "frictions": "docs/FRICCIONES.md"})
+        self.assertEqual(sorted(p.name for p in self.a.glob("*.md")), [])  # nothing created at the root
+
     def test_plan_writes_nothing(self):
         output = self.configure(self.a)
         self.assertIn("Plan solamente", output)
